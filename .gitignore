@@ -1,0 +1,7 @@
+.pio
+.vscode
+*.bak
+*.old
+logFile.txt
+stackTrace.txt
+*.DS_Store
