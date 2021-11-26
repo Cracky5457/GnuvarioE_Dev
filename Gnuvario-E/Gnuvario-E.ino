@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <Adafruit_I2CDevice.h>
 
 /*******************/
 /* Version         */
@@ -6,9 +7,9 @@
 
 #define VERSION 0
 #define SUB_VERSION 8
-#define BETA_CODE 4
+#define BETA_CODE 6
 #define DEVNAME "JPG63/MICELPA/RATAMUSE"
-#define AUTHOR "J" //J=JPG63  P=PUNKDUMP  M=MICHELPA
+#define AUTHOR "J" //J=JPG63  P=PUNKDUMP  M=MICHELPA    R=RATAMUSE
 
 /******************************************************************************************************/
 /*                                              VERSION                                               */
@@ -270,6 +271,56 @@
 * 0.8 Beta 4     11/09/20            Nouvelle bibliothèque toneHalI2S                                 *                                   
 *                                    Nouvelle bibliothèque de gestion des paramètres du son           *
 *                13/09/20            Modifie beeper pour utiliser varioXBeeper                        *                    
+*                26/09/20            Modifier Tonehal32 PWM pour accepter toutes les Pins dans        *
+*                                    HarwareConfig SPEAKER_PIN                                        *
+*                27/09/20            Ajout DISPLAY_LIGHT sur l'écran 1.54''                           *
+*                04/10/20            Correction beeper                                                *
+*                                    Correction affichage radio / trend                               *
+*                05/10/20            Ajout gestion PCB 3                                              *
+*                09/10/20            Correction deep-sleep pour V3                                    *
+*                                    Mise à jour GpxEpd2                                              *
+*                15/10/20            Correction bug affichage heure / duree sur ecran 2.91            *
+*                17/10/20            Ajout Gestion de la version                                      *
+* 0.8 beta 5     18/10/20            Ajout écran de charge X91                                        *
+*                22/10/20            Moidification calcul % charge                                    *
+*                                    Interdit les altitudes negatives                                 *
+*                                    Mise à jour GxEpd2                                               *
+*                                    Ajout compensation tension                                       *
+*                                    Correction bug fichier de langue                                 *
+*                25/10/20            Ajout écran charge pour X54 et X90                               *           
+*                26/10/20            Correction Aleksandr Stroganov <a.stroganov@me.com>              *
+*                11/11/20            Correction varioSetting - json static                            *
+*                                    Reduction allocation memoire EepromHal                           * 
+*                14/11/20            Reduction allocation memoire variolanguage                       *                    
+*                                    Integration code Pierre - correction site web                    *
+*                                    Reduction allocation memoire varioigcparser                      *
+*                                    Reduction allocation memoire esp32fota2                          *
+*                17/11/20            Ajout variodataprocessing                                        *
+*                21/11/20            Correction Site web                                              *
+*                25/11/20            Mise à jour date IGC                                             *
+*                01/12/20            Correction bug IGC                                               *
+*                                    maj lib busyIo                                                   *
+*                                    Modif page web                                                   *
+*                13/12/20            Mise à jour lib GxEpd2, ...                                      *
+*                                    Correction variolanguage                                         *
+*                                    Correction varioscreenepd291                                     *
+*                20/12/20            Correction d'affichage                                           *
+*                                    Correstion ajout site (page wifi)                                *
+*                                    Correction enregistrement ICG Altitude calibrée                  *         
+*                                    Correction bug son en continu - vario integré                    *
+*                                    Correction gestion memoire json                                  *
+*                09/02/21            Ajout gestion écran 2.9'' V2 - 292                               *
+*                02/03/21            Correction ecran V2                                              *
+*                14/03/21            Maj librairie gxepd2, esp32-targz, esp32fota2                    *  
+*                                    Maj ESP32 v1.05                                                  *
+* 0.8 beta 6     30/03/21            Modification lib varioData                                       *                                                                                     
+*                05/04/21            Modification altitude négative                                   *                                   
+*                11/04/21            Correction probleme de démmarage avec alti négative              *
+*                12/04/21            Ajout Mute jusqu'au décollage                                    *
+*                22/05/21            Ajout écran 294 (DKEG0290BNS800F6 /QYEG0290BNS800F6C02) pour test*
+*                                    & Ajout écran 2.9" Good Display GDEW029M06                       *
+*                03/06/21            Correction bug maj web - ajout d'un reboot                       *
+*                19/06/21            Correction cap et stabilisation vario                            *
 *******************************************************************************************************
 *                                                                                                     *
 *                                   Developpement a venir                                             *
@@ -280,34 +331,29 @@
 * BUG   - DISPLAY_OBJECT_LINE object ligne ne fonctionne pas                                          *
 *                                                                                                     *
 * v0.7                                                                                                *
-* BUG   - upload wifi - ne se termine pas  - bug espressif le buffer n'est pas vidé à la fin          *
-* BUG   - update manuelle - doit être lancée 2 fois                                                   *
-* BUG   - download à verifier                                                                         *
 *                                                                                                     *        
 * v0.8                                                                                                *       
 * BUG   - Grésillement Buzzer                                                                         * 
-* Ajout - Indication charge batterie                                                                  *
-* BUG   - altitude enregistré non compensé                                                            *
-* AJOUT - écran charge batterie au démarrage                                                          *
 * AJOUT - alti GPS                                                                                    *
 * BUG   - derive alti                                                                                 *
-* AJOUT - enregistrement alti compensé                                                                *                                                                                
-* BUG   - Deep sleep                                                                                  *
-* AJOUT - Ecran light                                                                                 *
-* BUG   - magnetomètre                                                                                *
 * BUG   - sensibilité vario                                                                           *
+* BUG   - compas GPS à verifier / problème compas magnétique                                          *
+* AJOUT - Deep-Sleep charge batterie                                                                  *
+* BUG   - intergration - bip continu  - A tester                                                      *
+* BUG   - Modification des paramètres wifi                                                            *
+* BUG   - trame IGC incomplete                                                                        *
+* BUG   - Affichage ecran V2                                                                          *
 *                                                                                                     *
 * VX.X                                                                                                *
 * Paramètrage des écrans                                                                              *
 * Gérer le son via le DAC                                                                             *
 * revoir volume du son ToneESP32                                                                      *
-* Refaire gestion du son (parametrage via xctracer)                                                   *
 * Boussole graphique                                                                                  *                                                                       
 * Création dynamique des objets screen                                                                *
 * Sens et vitesse du vent                                                                             *
 * Espace aérien                                                                                       *
 * 2 Altitudes                                                                                         *
-* Recupération vol via USB                                                                            *                                                                                        
+* Recupération vol via USB                                                                            *  
 *******************************************************************************************************/
 
 /************************************************************************
@@ -378,7 +424,15 @@
  *  - Carnet de vol                                                     *
  *  - BlueTooth trame xctracer                                          *
  *  - Ajout indication niveau de batterie dans la page de demarrage     *
- *  - Correction BUG cap affiche 388                                    *
+ *  - Correction BUG d'affichage                                        *
+ *  - Ajout gestion du paramètrage du son                               *
+ *  - Ajout de la gestion du PCB V3                                     *
+ *  - Gestion du GPS L86                                                *
+ *  - Ajout écran de charge                                             *
+ *  - Transfert des vol sur paraglidinglogbook                          *
+ *  - Nouvelles Pages Wifi avec gestion d'un carnet de vol              *
+ *  - Gestion nouvel écran pour TTGO                                    *
+ *  - Ajout Mute jusqu'au décollage                                     *
  *                                                                      *
  ************************************************************************/
 
@@ -415,6 +469,7 @@
 * wifi.cfg                 paramètres de configuration du wifi          *
 * log.cfg                  paramètres de configuration du fichier de log*
 * variocal.cfg             paramètres de calibration du MPU             *
+* variosound.cfg           paramètrage du son                           *
 * record00cal.igc          fichier contenant les mesures utiles au      *
 *                          calcul de la calibration                     *
 * HardwareConfig.h         parametres matériels communs                 *
@@ -439,10 +494,15 @@
 *                       INDEX.HTM                                      *
 *                       INDEXB.JS                                      *
 *                       INDEXB~1.MAP                                   *
+*               DB/                     - repertoire de base de donnees*        
+*                       VOL.DB          - carnet de vol                *
+*               GNUVARIOEN.jso          - fichier de langue            *                        
+*               GNUVARIOFR.JSO          - fichier de langue            *
 *               RECORD00.CAL            - fichier de calibration       *
 *               PARAMS.JSO              - fichier de configuration     *
 *               LOG.CFG                 - Paramètres de debug          *
 *               VARIOCAL.CFG            - Paramètres de calibration    *
+*               SOUNDCAL.CFG            - Paramètrage du son           *
 *               WIFI.CFG                - Paramètres Wifi              *
 *                                                                      *
 ************************************************************************/
@@ -462,6 +522,7 @@
 *   Ecran         Touche      Fonction                                                                       *
 *                                                                                                            *
 *   Init          Gauche      passage en mode Wifi                                                           *                                                                                                              
+*   Init          Centre      Ecran de charge                                                                *
 *   Init          Droite      Calibration                                                                    * 
 *                                                                                                            *
 *   Vario         Centre      Coupe et remet le son (Mute)                                                   *
@@ -481,6 +542,8 @@
 *                                                                                                            *
 *   Calibration   Centre      Démarre la calibration                                                         *                                                                                                        
 *   Calibration   Gauche      Sort du mode calibration (reboot)                                              *
+*                                                                                                            *
+*   Charge        Centre      Ajuste la reférence de tension                                                 *                                                                                                         
 *                                                                                                            *
 **************************************************************************************************************
 *                                                                                                            *
@@ -569,9 +632,9 @@
 
 #include <HardwareConfig.h>
 
-#ifdef HAVE_SDCARD
-#include <sdcardHAL.h>
-#endif //HAVE_SDCARD
+//#ifdef HAVE_SDCARD
+//#include <sdcardHAL.h>
+//#endif //HAVE_SDCARD
 
 #include <Update.h>
 #include <SD_Update.h>
@@ -622,7 +685,7 @@ VarioData varioData;
 //*******************************
 
 #ifdef HAVE_WIFI
-#include <VarioWifiServer.h>
+#include <VarioWifi.h>
 #include <esp32fota2.h>
 #endif //HAVE_WIFI
 
@@ -630,30 +693,32 @@ VarioData varioData;
  Serveur Web
  *************************************************/
 #ifdef HAVE_WIFI
-String webpage = "";
+//String webpage = "";
+//
+//#ifdef ESP8266
+//ESP8266WiFiMulti wifiMulti;
+//ESP8266WebServer server(80);
+//#else
+//WiFiMulti wifiMulti;
+//#ifdef ESP32WEBSERVEUR
+//VarioESP32WebServer server(80);
+//#elif defined(ESPASYNCWEBSERVER)
+//#include <WiFi.h>
+//#include <AsyncTCP.h>
+//#include <ESPAsyncWebServer.h>
+//AsyncWebServer server(80);
+//#elif defined(ETHERNETWEBSERVER)
+//EthernetServer server(80);
+//#elif defined(ESPRESSIFWEBSERVEUR)
+//WebServer server(80);
+//#else  //ESP32WEBSERVEUR
+//VarioWebServer server(80);
+//#endif //ESP32WEBSERVEUR
+//#endif
 
-#ifdef ESP8266
-ESP8266WiFiMulti wifiMulti;
-ESP8266WebServer server(80);
-#else
-WiFiMulti wifiMulti;
-#ifdef ESP32WEBSERVEUR
-VarioESP32WebServer server(80);
-#elif defined(ESPASYNCWEBSERVER)
-#include <WiFi.h>
-#include <AsyncTCP.h>
-#include <ESPAsyncWebServer.h>
-AsyncWebServer server(80);
-#elif defined(ETHERNETWEBSERVER)
-EthernetServer server(80);
-#elif defined(ESPRESSIFWEBSERVEUR)
-WebServer server(80);
-#else  //ESP32WEBSERVEUR
-VarioWebServer server(80);
-#endif //ESP32WEBSERVEUR
-#endif
+//esp32FOTA2 esp32FOTA("Gnuvario" + String(VARIOSCREEN_SIZE), VERSION, SUB_VERSION, BETA_CODE); //esp32-fota-http", 0,6,0);
 
-esp32FOTA2 esp32FOTA("Gnuvario" + String(VARIOSCREEN_SIZE), VERSION, SUB_VERSION, BETA_CODE); //esp32-fota-http", 0,6,0);
+esp32FOTA2 esp32FOTA("Gnuvario" + String(VARIOSCREEN_SIZE), VERSION, SUB_VERSION, BETA_CODE);
 
 #endif //HAVE_WIFI
 
@@ -682,6 +747,12 @@ void setup()
   TestSDCARD(true);
 #endif
 
+  /*********************************/
+  /*  Init VarioHardwareManager    */
+  /*********************************/
+
+  varioHardwareManager.init();
+
   /*****************************/
   /*  Init Alimentation        */
   /*****************************/
@@ -691,23 +762,81 @@ void setup()
   /* wait for devices power on */
   /*****************************/
 #ifdef PROG_DEBUG
-  delay(5000);
+  delay(2000);
 #else
   delay(VARIOMETER_POWER_ON_DELAY);
 #endif
 
   /************************/
+  /*  VERSION / HARDWARE  */
+  /************************/
+
+  SerialPort.print("VERSION : ");
+  SerialPort.println(VARIOVERSION);
+
+#if (VARIOVERSION == 154) 
+  SerialPort.println("VERSION : 1");
+#elif ((VARIOVERSION == 254) || (VARIOVERSION == 290) || (VARIOVERSION == 291) || (VARIOVERSION == 292) || (VARIOVERSION == 293) || (VARIOVERSION == 294)) 
+  SerialPort.println("VERSION : 2");
+#elif ((VARIOVERSION == 354) || (VARIOVERSION == 390) || (VARIOVERSION == 391) || (VARIOVERSION == 392) || (VARIOVERSION == 393)) 
+  SerialPort.println("VERSION : 3");
+#else
+  SerialPort.println("VERSION : XXX");
+#endif
+
+  SerialPort.print("PCB VERSION : ");
+  SerialPort.println(PCB_VERSION);
+
+#if ((VARIOSCREEN_SIZE == 154) || (VARIOSCREEN_SIZE == 254) || (VARIOSCREEN_SIZE == 354))
+  SerialPort.println("ECRAN : 1.54");
+#elif ((VARIOSCREEN_SIZE == 290) || (VARIOSCREEN_SIZE == 292) || (VARIOVERSION == 390))
+  SerialPort.println("ECRAN : 2.90 PAYSAGE");
+#elif ((VARIOSCREEN_SIZE == 291)  || (VARIOSCREEN_SIZE == 293) || (VARIOSCREEN_SIZE == 294))
+  SerialPort.println("ECRAN : 2.90 PORTRAIT");
+#endif
+
+#if defined(L86)
+  SerialPort.println("GPS : L86");
+#elif defined(ATGM336H)
+  SerialPort.println("GPS : ATGM336H");
+#elif defined(NEO_6M)
+  SerialPort.println("GPS : NEO_6M");
+#else
+  SerialPort.println("GPS : XXXXX");
+#endif
+
+#if defined(HAVE_BLUETOOTH)
+  SerialPort.println("BLUETOOTH : Enable");
+#elif defined(HAVE_BLE)
+  SerialPort.println("BLE : Enable");
+#endif
+  
+  /************************/
   /*    BOOT SEQUENCE     */
   /************************/
 
+#ifdef MEMORY_DEBUG
+  SerialPort.println("init");
+  SerialPort.println(ESP.getFreeHeap());
+#endif
+
   varioData.init(VERSION, SUB_VERSION, BETA_CODE, String(DEVNAME));
 
+#ifdef MEMORY_DEBUG
+  SerialPort.println("varioHardwareManager");
+  SerialPort.println(ESP.getFreeHeap());
+#endif
   varioHardwareManager.init();
 
   /******************/
   /* Init Speaker   */
   /******************/
   varioHardwareManager.initSpeaker();
+
+#ifdef MEMORY_DEBUG
+  SerialPort.println("initSpeaker");
+  SerialPort.println(ESP.getFreeHeap());
+#endif
 
   /******************/
   /* Init SDCARD    */
@@ -719,12 +848,23 @@ void setup()
   varioData.initSettings(true);
 #endif //TEST_SD
 
+#ifdef MEMORY_DEBUG
+  SerialPort.println("initSettings");
+  SerialPort.println(ESP.getFreeHeap());
+#endif
   //**********************************************
   // Charge le fichier de langue
   //**********************************************
-  varioLanguage.init(GnuSettings.LANGUAGE);
+#ifdef SDCARD_DEBUG
+  SerialPort.println("*** Charge fichier de Langue ****");
+#endif
 
-#ifdef HAVE_SDCARD
+  varioLanguage.init(GnuSettings.LANGUAGE);
+#ifdef MEMORY_DEBUG
+  SerialPort.println("LANGUAGE");
+  SerialPort.println(ESP.getFreeHeap());
+ #endif
+#ifdef SDCARD_DEBUG
   SerialPort.print("TITRE_TIME : ");
   SerialPort.println(varioLanguage.getText(TITRE_TIME));
 #endif
@@ -758,6 +898,11 @@ void setup()
   SerialPort.flush();
 #endif //SCREEN_DEBUG
 
+#ifdef MEMORY_DEBUG
+  SerialPort.println("init before screen");
+  SerialPort.println(ESP.getFreeHeap());
+#endif
+
 #if defined(ESP32)
   ESP_LOGI("SCREEN", "initialization screen");
 #endif //EPS32
@@ -781,6 +926,19 @@ void setup()
 
 #if defined(HAVE_SDCARD) && defined(HAVE_WIFI)
   esp32FOTA.UpdateWwwDirectory();
+  if (esp32FOTA.UpdateWwwDirectoryFromGz() == 1) 
+  {
+    //Mise à jour
+    beeper.generateTone(659, 150);
+    beeper.generateTone(1318, 150);
+    beeper.generateTone(2636, 150);
+
+    SerialPort.println("RESTART ESP32");
+    SerialPort.flush();
+    ESP_LOGI("GnuVario-E", "RESTART ESP32");
+    ESP.restart();    
+  } 
+  
 #endif //HAVE_SDCARD
 
   /***************/
@@ -804,8 +962,15 @@ void setup()
   ESP_LOGI(TAG, "Display Boot");
 #endif //EPS32
 
+#ifdef MEMORY_DEBUG
+  SerialPort.println("init before boot");
+  SerialPort.println(ESP.getFreeHeap());
+  beeper.generateTone(659, 150);
+  beeper.generateTone(1318, 150);
+  beeper.generateTone(2636, 150);
+#endif
+  
   screen.ScreenViewInit(VERSION, SUB_VERSION, AUTHOR, BETA_CODE);
-
 #endif //HAVE_SCREEN
 
   //***********************************************
@@ -860,7 +1025,7 @@ void setup()
       compteur++;
 
       //    Messure d'altitude
-      firstAlti = varioHardwareManager.getAlti();
+      firstAlti = varioHardwareManager.firstAlti();  //getAlti();
     }
   }
 
@@ -942,6 +1107,7 @@ double temprature = 0;
 //*****************************
 void loop()
 {
+  SerialPort.println("loop");
   //****************************
   //****************************
 
@@ -1056,6 +1222,7 @@ void loop()
         screen.trendDigit->setValue(0);
       screen.trendLevel->stateTREND(varioData.getStateTrend());
     }
+    screen.trendDigit->reset();
   }
 
   //**********************************************************
@@ -1072,7 +1239,6 @@ void loop()
 #endif //PROG_DEBUG
 #endif //HAVE_SPEAKER
 
-
   //**********************************************************
   //  TRAITEMENT DU SON
   //**********************************************************
@@ -1083,7 +1249,6 @@ void loop()
 #if defined(TONEXTDAC) || defined(TONEI2S) 
   toneHAL.update();
 #endif
-
 
   //**********************************************************
   //  EMISSION TRAME BT
@@ -1193,7 +1358,7 @@ void loop()
 #ifdef GPS_DEBUG
     SerialPort.print("Sat : ");
     SerialPort.println(nmeaParser.satelliteCount);
-#endif //GPS_DEBUG \
+#endif //GPS_DEBUG 
        //    DUMPLOG(LOG_TYPE_DEBUG,GPS_DEBUG_LOG,nmeaParser.satelliteCount);
   }
 #endif //HAVE_GPS
@@ -1217,6 +1382,8 @@ void loop()
   {
     screen.ratioDigit->setValue(0);
   }
+
+  screen.ratioDigit->reset();
 
 #endif //HAVE_GPS
 
@@ -1273,7 +1440,7 @@ void loop()
     int tmpcap = varioData.getCap();
     if (tmpcap > 0)
     {
-      String bearingStr = nmeaParser.Bearing_to_Ordinal(tmpcap);
+      String bearingStr = nmeaParser.Bearing_to_Ordinal2c(tmpcap);
 #ifdef DATA_DEBUG
       SerialPort.print("Compas : ");
       SerialPort.print(tmpcap);
@@ -1285,7 +1452,7 @@ void loop()
 
       screen.gpsBearing->setValue(tmpcap);
       screen.gpsBearingText->setValue(bearingStr);
-#if (VARIOSCREEN_SIZE == 291)
+#if ((VARIOSCREEN_SIZE == 291) || (VARIOSCREEN_SIZE == 293) || (VARIOSCREEN_SIZE == 294))
       screen.bearing->setValue(tmpcap);
       screen.bearingText->setValue(bearingStr);
 #endif

@@ -25,6 +25,9 @@
  *                                                                               *
  *  version    Date     Description                                              *
  *    1.0    22/03/20                                                            *
+ *    1.0.1  09/06/20   Ajout GnuSettings.BLUETOOTH_SEND_CALIBRATED_ALTITUDE     *
+ *    1.0.2  25/12/20   Modif getCap                                             *
+ *    1.0.3  11/04/21   Mofig getAlti                                            *
  *                                                                               *
  *********************************************************************************
  */
@@ -33,7 +36,7 @@
 #define VARIO_HARDWARE_MANAGER_H
 
 #include <HardwareConfig.h>
-#include <VarioAlim.h>
+#include <VarioPower.h>
 #include <VarioSpeaker.h>
 #include <VarioImu.h>
 #include <VarioGps.h>
@@ -54,7 +57,6 @@
 class VarioHardwareManager
 {
 private:
-	VarioSpeaker varioSpeaker;
 	VarioImu varioImu;
 	VarioGps varioGps;
 #ifdef HAVE_BLUETOOTH
@@ -63,7 +65,8 @@ private:
 
 
 public:
-	VarioAlim varioAlim;
+	VarioPower varioPower;
+	VarioSpeaker varioSpeaker;
 
 	VarioHardwareManager();
 	void init();

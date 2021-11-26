@@ -1,10 +1,6 @@
 #ifndef _HARDWARECONFIG_H_
 #define _HARDWARECONFIG_H_
 
-#include <HardwareConfigPRO.h>
-#include <HardwareConfigESP32.h>
-#include <HardwareConfigMK0.h>
-
 /* HardwareConfig -- 
  *
  * Copyright 2019 Jean-philippe GOI
@@ -31,35 +27,85 @@
 /*                                                                               */
 /*  version    Date     Description                                              */
 /*    1.0    03/06/19                                                            */
-/*    1.0.1  24/06/19   Ajout profil GPS - choix entre 2 versions 							 */
+/*    1.0.1  24/06/19   Ajout profil GPS - choix entre 2 versions 				 */
 /*    1.0.2  23/07/19   suppression des parametres CLIMB_RATE                    */
 /*    1.0.3  04/08/19   Ajout config Wifi                                        */
 /*    1.0.4  16/08/19   Ajout HAVE_WIFI                                          */
-/*		1.0.5	 05/09/19		Ajout MPU_COMP_TEMP																			 */
-/*    1.0.6  19/09/19   Ajout NB_ACQUISITION_FIX_GPS														 */
-/*    1.0.7  06/10/19   Ajout R�solution de l'ecran                              */
-/*    1.0.8  22/10/19   Ajout �cran 2.13''                                       */
+/*	  1.0.5	 05/09/19	Ajout MPU_COMP_TEMP      								 */
+/*    1.0.6  19/09/19   Ajout NB_ACQUISITION_FIX_GPS							 */
+/*    1.0.7  06/10/19   Ajout Résolution de l'ecran                              */
+/*    1.0.8  22/10/19   Ajout Ecran 2.13''                                       */
 /*    1.0.9  11/01/20   Ajout DISPLAY_LOW_UPDATE et DISPLAY_UPDATE               */
+/*    1.0.10 27/09/20   Ajout DISPLAY_LIGHT                                      */
+/*    1.0.11 05/10/20   Ajout gestion PCB3										 */
+/*    1.0.12 07/12/20   Ajout PCB V3.5                                           */
+/*    1.0.13 10/12/20   Ajout display orientation                                */
+/*    1.0.14 22/05/21   Ajout écran 294 (DKEG0290BNS800F6 /QYEG0290BNS800F6C02)  */
+/*                      Pour test                                                */
+/*                      & Ajout écran 2.9" Good Display GDEW029M06               */
 /*                                                                               */
 /*********************************************************************************/
+
+//VERSION
+//#define VARIOVERSION 154     //PCB Version 1 avec ecran 1.54 / PCB version 1 with 1.54" screen
+//#define VARIOVERSION 254     //PCB Version 2 avec ecran 1.54 / PCB Version 2 with 1.54" screen
+//#define VARIOVERSION 290     //PCB Version 2 avec ecran 2.9" paysage / PCB version 2 with 2.9" screen landscape (TTGO-T5-V2.4 before 12/2020)
+//#define VARIOVERSION 291     //PCB Version 2 avec ecran 2.9" portrait / PCB version 2 with 2.9" screen portrait (TTGO-T5-V2.4 before 12/2020)
+//#define VARIOVERSION 292     //PCB Version 2 avec ecran 2.9" paysage /PCB version 2 with 2.9" screen landscape  (Ecran/Screen Good Display GDEW029M06)      
+//#define VARIOVERSION 293     //PCB Version 2 avec ecran 2.9" portrait / PCB version 2 with 2.9" screen portrait (Ecran/Screen Good Display GDEW029M06)
+//#define VARIOVERSION 294     //PCB Version 2 avec ecran 2.9" portrait / PCB version 2 with 2.9" screen portrait (TTGO-T5-V2.4 after 12/2020 Screen number DKEG0290BNS800F6 /QYEG0290BNS800F6C02 ) For test purpose only
+//#define VARIOVERSION 354     //PCB Version 3.1 avec ecran 1.54 / PCB Version 3.1 with 1.54" screen
+//#define VARIOVERSION 390     //PCB Version 3.1 avec ecran 2.9" paysage / PCB version 3.1 with 2.9" screen landscape (TTGO-T5-V2.4 before 12/2021)
+#define VARIOVERSION 391     //PCB Version 3.1 avec ecran 2.9" portrait / PCB version 3.1 with 2.9" screen portrait (TTGO-T5-V2.4 before 12/2021)
+//#define VARIOVERSION 392     //PCB Version 3.1 avec ecran 2.9" Good Display GDEW029M06 paysage / PCB version 3.1 with 2.9" screen landscape  (Ecran/Screen Good Display GDEW029M06) 
+//#define VARIOVERSION 393	   //PCB Version 3.1 avec ecran 2.9" Good Display GDEW029M06 portrait / PCB version 3.1 with 2.9" screen portrait (Ecran/Screen Good Display GDEW029M06) 
+//#define VARIOVERSION 395     //PCB Version 3.5 avec ecran 2.9" paysage (futur BNO085/86)
+//#define VARIOVERSION 396     //PCB Version 3.5 avec ecran 2.9" portrait (futurBNO085/86)
+
+#include <HardwareConfigPRO.h>
+#include <HardwareConfigESP32.h>
+#include <HardwareConfigMK0.h>
 
 /******************************/
 /*            SCREEN          */
 /******************************/
 
-//#define VARIOSCREEN_SIZE 	154		//Ecran 1.54''
-//#define VARIOSCREEN_SIZE	290 	//Ecran 2.90'' Paysage
-#define VARIOSCREEN_SIZE 	291 	//Ecran 2.90'' Portrait
+#if ((VARIOVERSION == 154) || (VARIOVERSION == 254) || (VARIOVERSION == 354)) 
+#define VARIOSCREEN_SIZE 	154		//Ecran 1.54''
+#define DISPLAY_PORTRAIT
+#elif ((VARIOVERSION == 290) || (VARIOVERSION == 390) || (VARIOVERSION == 395)) 
+#define VARIOSCREEN_SIZE	290 	//Ecran 2.90'' Paysage / 2.9 screen landscape (TTGO-T5-V2.4 before 12/2020)
+#define DISPLAY_LANDSCAPE
+#elif ((VARIOVERSION == 291) || (VARIOVERSION == 391) || (VARIOVERSION == 396)) 
+#define VARIOSCREEN_SIZE 	291 	//Ecran 2.90'' Portrait / 2.9 screen portrait (TTGO-T5-V2.4 before 12/2020)
+#define DISPLAY_PORTRAIT
+#elif ((VARIOVERSION == 292)|| (VARIOVERSION == 392)) 
+#define VARIOSCREEN_SIZE 	292 	//Ecran Good Display GDEW029M06 paysage/landscape
+#define DISPLAY_LANDSCAPE
+#elif ((VARIOVERSION == 293)|| (VARIOVERSION == 393)) 
+#define VARIOSCREEN_SIZE 	293 	//Ecran Good Display GDEW029M06 portrait
+#define DISPLAY_PORTRAIT
+#elif ((VARIOVERSION == 294)) 
+#define VARIOSCREEN_SIZE 	294 	//2.9 screen portrait (TTGO-T5-V2.4 after 12/2020 Screen number DKEG0290BNS800F6 / QYEG0290BNS800F6C02)
+#define DISPLAY_PORTRAIT
+#else
+#define VARIOSCREEN_SIZE 	154		//Ecran 1.54''
+#define DISPLAY_PORTRAIT
+#endif
 
 #if (VARIOSCREEN_SIZE == 154)
 #define DISPLAY_LOW_UPDATE 50
 #define DISPLAY_UPDATE    10
-#elif (VARIOSCREEN_SIZE == 290)
+//#define DISPLAY_LIGHT
+#elif ((VARIOSCREEN_SIZE == 290) || (VARIOSCREEN_SIZE == 292))
 #define DISPLAY_LOW_UPDATE 40
 #define DISPLAY_UPDATE    10
-#elif (VARIOSCREEN_SIZE == 291)
-#define DISPLAY_LOW_UPDATE 300 //40
-#define DISPLAY_UPDATE    300 //10
+#elif ((VARIOSCREEN_SIZE == 291) || (VARIOSCREEN_SIZE == 293) || (VARIOSCREEN_SIZE == 294))
+#define DISPLAY_LOW_UPDATE 40 //40
+#define DISPLAY_UPDATE    10 //10
+#else
+#define DISPLAY_LOW_UPDATE 40 //40
+#define DISPLAY_UPDATE    10 //10
 #endif
 
 /***********************/
@@ -143,6 +189,34 @@
 /*****************************************************/
 /*    choix de la librairie MPU/MS5611               */
 /*****************************************************/
+
+#if ((VARIOVERSION == 395) || (VARIOVERSION == 396)) 
+#define BNO085
+#define MPU_STATIC_ADDRESS 0x4A
+
+/* calibration method */
+// by EEPROM
+//#define IMU_CALIBRATION_IN_EEPROM
+// or by static value
+
+/* Parametre par defaut */
+#define VERTACCEL_GYRO_CAL_BIAS {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+#define VERTACCEL_ACCEL_CAL_BIAS {0, 0, 0}
+#define VERTACCEL_ACCEL_CAL_SCALE 0
+#define VERTACCEL_MAG_CAL_BIAS {0, 0, 0}
+#define VERTACCEL_MAG_CAL_PROJ_SCALE -16689
+#define VERTACCEL_ACCEL_CAL_BIAS_MULTIPLIER 7
+#define VERTACCEL_MAG_CAL_BIAS_MULTIPLIER 5
+
+#define MPU_ENABLE_INT_PIN
+
+//TEMPORAIRE POUR COMPILATION
+#define MPU9250
+#define MPU_STATIC_ADDRESS 0x68
+#define MPU_COMP_TEMP -6
+
+#else
+
 #define TWOWIRESCHEDULER
 
 /* If you embed an accelerometer set the model here. */
@@ -195,6 +269,7 @@
 
 /* enable if you want to use the MPU INT pin */
 #define MPU_ENABLE_INT_PIN
+#endif
 
 /*****************************/
 /* SDCard/Bluetooth behavior */
@@ -203,7 +278,7 @@
 /* What type of barometric altitude is sent :           */
 /* -> Based on international standard atmosphere        */
 /* -> Calibrated with GPS altitude                      */
-//#define VARIOMETER_SDCARD_SEND_CALIBRATED_ALTITUDE
+#define VARIOMETER_SDCARD_SEND_CALIBRATED_ALTITUDE		//obsolete - remplacé par réglage page web
 //#define VARIOMETER_BLUETOOTH_SEND_CALIBRATED_ALTITUDE
 
 /* What type of vario NMEA sentence is sent by bluetooth. */
@@ -245,9 +320,14 @@
 #define NB_ACQUISITION_FIX_GPS 20
 
 // GPS MODEL
+#if (PCB_VERSION == 3)
+	// PCB 3
+#define L86
+#else
 #define ATGM336H
 //#define NEO_6M
 //#define L86
+#endif
 
 #if defined(ATGM336H)
 #undef NEO_6M
@@ -358,6 +438,12 @@
 
 #if defined(HAVE_BLE) && !defined(HAVE_BLUETOOTH)
 #define HAVE_BLUETOOTH
+#endif
+
+#if defined(HAVE_WIFI) && defined(HAVE_BLUETOOTH) && defined(HAVE_BLE)
+// 							OUTPUT SERIALNMEA
+//#define SERIAL_NMEA_SERIAL_OUTPUT
+#define SERIAL_NMEA_BLUETOOTH_OUTPUT
 #endif
 
 #endif

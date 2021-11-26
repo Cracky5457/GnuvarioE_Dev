@@ -23,6 +23,8 @@
 #define esp32fota2_h
 
 #include "Arduino.h"
+#include <ESP32-targz.h>
+#include <sdcardHAL.h>
 
 #define MAJ_ERROR 			-1
 #define MAJ_AVAILABLE 		1
@@ -46,6 +48,7 @@ public:
 	String getHTTPVersion();
 	String getHTTPSVersion();
 	bool UpdateWwwDirectory(void);
+  int8_t UpdateWwwDirectoryFromGz();
 
 private:
   String getHeaderValue(String header, String headerName);
@@ -58,11 +61,12 @@ private:
   String _bin;
   String _wwwfiles[10];
   uint8_t NB_WWW_FILES = 0;
+  String _gzwwwfile;
   int _port;
   void downloadWwwFiles();
+  void downloadGzwwwFile();
 };
 
 extern const char* rootCACertificate;
 
-extern esp32FOTA2 esp32FOTA;
 #endif

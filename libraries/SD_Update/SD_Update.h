@@ -37,7 +37,7 @@
 #include <Arduino.h>
 #include <HardwareConfig.h>
 #include <DebugConfig.h>
-
+#include <Update.h>
 #include <varioscreenGxEPD.h>
 
 #ifndef ARDUINOTRACE_ENABLE

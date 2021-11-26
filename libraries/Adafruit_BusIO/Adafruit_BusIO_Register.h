@@ -7,8 +7,21 @@
 
 typedef enum _Adafruit_BusIO_SPIRegType {
   ADDRBIT8_HIGH_TOREAD = 0,
+  /*!<
+   * ADDRBIT8_HIGH_TOREAD
+   * When reading a register you must actually send the value 0x80 + register
+   * address to the device. e.g. To read the register 0x0B the register value
+   * 0x8B is sent and to write 0x0B is sent.
+   */
   AD8_HIGH_TOREAD_AD7_HIGH_TOINC = 1,
+
   ADDRBIT8_HIGH_TOWRITE = 2,
+  /*!<
+   * ADDRBIT8_HIGH_TOWRITE
+   * When writing to a register you must actually send the value 0x80 +
+   * the register address to the device. e.g. To write to the register 0x19 the
+   * register value 0x99 is sent and to read 0x19 is sent.
+   */
 } Adafruit_BusIO_SPIRegType;
 
 /*!
@@ -20,6 +33,7 @@ public:
   Adafruit_BusIO_Register(Adafruit_I2CDevice *i2cdevice, uint16_t reg_addr,
                           uint8_t width = 1, uint8_t byteorder = LSBFIRST,
                           uint8_t address_width = 1);
+
   Adafruit_BusIO_Register(Adafruit_SPIDevice *spidevice, uint16_t reg_addr,
                           Adafruit_BusIO_SPIRegType type, uint8_t width = 1,
                           uint8_t byteorder = LSBFIRST,
@@ -40,6 +54,10 @@ public:
   bool write(uint32_t value, uint8_t numbytes = 0);
 
   uint8_t width(void);
+
+  void setWidth(uint8_t width);
+  void setAddress(uint16_t address);
+  void setAddressWidth(uint16_t address_width);
 
   void print(Stream *s = &Serial);
   void println(Stream *s = &Serial);

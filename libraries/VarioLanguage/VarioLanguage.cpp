@@ -25,12 +25,22 @@
  *                                                                               *
  *  version    Date     Description                                              *
  *    1.0    11/04/20                                                            *
+ *    1.1    22/10/20   Ajout titre pour ecran batterie                          *
+ *    1.1.1  24/10/20   Correction recup fichier de langue taille variable       *
+ *    1.1.2  14/11/20   json doc externe                                         *
+ *    1.1.3  10/12/20   Ajout STAT_XXX                                           *
  *                                                                               *
  *********************************************************************************
  */
 
 #include <HardwareConfig.h>
 #include <DebugConfig.h>
+
+#define JSONDOCEXTERN
+
+#ifdef JSONDOCEXTERN
+#include <VarioSettings.h>
+#endif
 
 #ifdef DATA_DEBUG
 #define ARDUINOTRACE_ENABLE 1
@@ -78,6 +88,11 @@ VarioLanguage varioLanguage;
 #define DEFAULT_TITRE_ENCOURS "en cours"
 #define DEFAULT_TITRE_CALIBR "Calibration"
 #define DEFAULT_TITRE_VEILLE "En veille"
+#define DEFAULT_TITRE_CHARGE "en charge"
+#define DEFAULT_TITRE_CHARGER "chargee"
+#define DEFAULT_TITRE_BATTERIE "Batterie"
+#define DEFAULT_TITRE_STAT_DUREE "Duree"
+#define DEFAULT_TITRE_STAT_SPEED "Vitesse"
 
 //****************************************************************************************************************************
 void VarioLanguage::init(uint8_t language)
@@ -141,20 +156,35 @@ void VarioLanguage::loadConfigurationLangue(char *filename)
 		TITRE_TAB[TITRE_ENCOURS] = DEFAULT_TITRE_ENCOURS;
 		TITRE_TAB[TITRE_CALIBR] = DEFAULT_TITRE_CALIBR;
 		TITRE_TAB[TITRE_VEILLE] = DEFAULT_TITRE_VEILLE;
+		TITRE_TAB[TITRE_CHARGE] = DEFAULT_TITRE_CHARGE;
+		TITRE_TAB[TITRE_CHARGER] = DEFAULT_TITRE_CHARGER;
+		TITRE_TAB[TITRE_BATTERIE] = DEFAULT_TITRE_BATTERIE;
+		TITRE_TAB[TITRE_STAT_DUREE] = DEFAULT_TITRE_STAT_DUREE;
+		TITRE_TAB[TITRE_STAT_SPEED] = DEFAULT_TITRE_STAT_SPEED;
 
 		return;
 	}
 
-	const size_t capacity = JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(2) + JSON_OBJECT_SIZE(4) + 2 * JSON_OBJECT_SIZE(12) + 460;
+#ifndef JSONDOCEXTERN
+	const size_t capacity = 1003; //JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(2) + JSON_OBJECT_SIZE(4) + JSON_OBJECT_SIZE(12) + JSON_OBJECT_SIZE(15) + 300;
+	//JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(2) + JSON_OBJECT_SIZE(4) + 2 * JSON_OBJECT_SIZE(12) + 460;
 	//JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(2) + JSON_OBJECT_SIZE(4) + JSON_OBJECT_SIZE(10) + JSON_OBJECT_SIZE(12)+100;
+
 	DynamicJsonDocument doc(capacity);
+	#define JSONDOC doc
+#else
+	#define JSONDOC GnuSettings.doc	
+// Clearing Buffer
+	JSONDOC.clear();
+#endif
 
 #ifdef SDCARD_DEBUG
 	SerialPort.println("deserialisation");
 #endif
 
 	// Deserialize the JSON document
-	DeserializationError error = deserializeJson(doc, file);
+	DeserializationError error = deserializeJson(JSONDOC, file);
+
 	if (error)
 	{
 		SerialPort.println(F("Failed to read file, using default configuration"));
@@ -182,6 +212,11 @@ void VarioLanguage::loadConfigurationLangue(char *filename)
 		TITRE_TAB[TITRE_ENCOURS] = DEFAULT_TITRE_ENCOURS;
 		TITRE_TAB[TITRE_CALIBR] = DEFAULT_TITRE_CALIBR;
 		TITRE_TAB[TITRE_VEILLE] = DEFAULT_TITRE_VEILLE;
+		TITRE_TAB[TITRE_CHARGE] = DEFAULT_TITRE_CHARGE;
+		TITRE_TAB[TITRE_CHARGER] = DEFAULT_TITRE_CHARGER;
+		TITRE_TAB[TITRE_BATTERIE] = DEFAULT_TITRE_BATTERIE;
+		TITRE_TAB[TITRE_STAT_DUREE] = DEFAULT_TITRE_STAT_DUREE;
+		TITRE_TAB[TITRE_STAT_SPEED] = DEFAULT_TITRE_STAT_SPEED;			
 
 		return;
 	}
@@ -192,7 +227,7 @@ void VarioLanguage::loadConfigurationLangue(char *filename)
 	SerialPort.println("Systeme : ");
 #endif
 
-	const char *GnuvarioE_version_langue = doc["gnuvarioe"]["version"]; // "1.0"
+	const char *GnuvarioE_version_langue = JSONDOC["gnuvarioe"]["version"]; // "1.0"
 	if (strcmp(GnuvarioE_version_langue, PARAMS_VERSION_LANGUE) != 0)
 		MajFileParams = true;
 
@@ -202,7 +237,7 @@ void VarioLanguage::loadConfigurationLangue(char *filename)
 	SerialPort.println("****** Titre *******");
 #endif
 
-	JsonObject Titre = doc["titre"];
+	JsonObject Titre = JSONDOC["titre"];
 
 	if (Titre.containsKey("TIME"))
 	{
@@ -640,7 +675,7 @@ void VarioLanguage::loadConfigurationLangue(char *filename)
 	SerialPort.println("****** Message *******");
 #endif
 
-	JsonObject Message = doc["message"];
+	JsonObject Message = JSONDOC["message"];
 
 	if (Message.containsKey("STAT"))
 	{
@@ -1074,6 +1109,194 @@ void VarioLanguage::loadConfigurationLangue(char *filename)
 	SerialPort.println(TITRE_TAB[TITRE_VEILLE]);
 #endif
 
+	if (Message.containsKey("CHARGE"))
+	{
+		const char *Message_CHARGE = Message["CHARGE"];
+#ifdef SDCARD_DEBUG
+		SerialPort.print("Message_CHARGE : ");
+		SerialPort.println(Message_CHARGE);
+#endif
+		tmpValueString = String(Message_CHARGE);
+
+#ifdef SDCARD_DEBUG
+		SerialPort.print("tmpValueString : ");
+		SerialPort.println(tmpValueString);
+#endif
+
+#ifdef SDCARD_DEBUG
+		SerialPort.print("Json Recup - ");
+#endif
+	}
+	else
+	{
+		tmpValueString = DEFAULT_TITRE_CHARGE;
+		MajFileParams = true;
+#ifdef SDCARD_DEBUG
+		SerialPort.print("Defaut Recup - ");
+#endif
+	}
+	TITRE_TAB[TITRE_CHARGE] = tmpValueString.substring(0, MAX_CAR_TITRE_CHARGE);
+#ifdef SDCARD_DEBUG
+	SerialPort.print("Index : ");
+	SerialPort.print(TITRE_CHARGE);
+	SerialPort.print(" - Max car : ");
+	SerialPort.println(MAX_CAR_TITRE_CHARGE);
+	SerialPort.print("TITRE_CHARGE : ");
+	SerialPort.println(TITRE_TAB[TITRE_CHARGE]);
+#endif
+
+	if (Message.containsKey("CHARGER"))
+	{
+		const char *Message_CHARGER = Message["CHARGER"];
+#ifdef SDCARD_DEBUG
+		SerialPort.print("Message_CHARGER : ");
+		SerialPort.println(Message_CHARGER);
+#endif
+		tmpValueString = String(Message_CHARGER);
+
+#ifdef SDCARD_DEBUG
+		SerialPort.print("tmpValueString : ");
+		SerialPort.println(tmpValueString);
+#endif
+
+#ifdef SDCARD_DEBUG
+		SerialPort.print("Json Recup - ");
+#endif
+	}
+	else
+	{
+		tmpValueString = DEFAULT_TITRE_CHARGER;
+		MajFileParams = true;
+#ifdef SDCARD_DEBUG
+		SerialPort.print("Defaut Recup - ");
+#endif
+	}
+	TITRE_TAB[TITRE_CHARGER] = tmpValueString.substring(0, MAX_CAR_TITRE_CHARGER);
+#ifdef SDCARD_DEBUG
+	SerialPort.print("Index : ");
+	SerialPort.print(TITRE_CHARGER);
+	SerialPort.print(" - Max car : ");
+	SerialPort.println(MAX_CAR_TITRE_CHARGER);
+	SerialPort.print("TITRE_CHARGER : ");
+	SerialPort.println(TITRE_TAB[TITRE_CHARGER]);
+#endif
+
+	if (Message.containsKey("BATTERIE"))
+	{
+		const char *Message_BATTERIE = Message["BATTERIE"];
+#ifdef SDCARD_DEBUG
+		SerialPort.print("Message_BATTERIE : ");
+		SerialPort.println(Message_BATTERIE);
+#endif
+		tmpValueString = String(Message_BATTERIE);
+
+#ifdef SDCARD_DEBUG
+		SerialPort.print("tmpValueString : ");
+		SerialPort.println(tmpValueString);
+#endif
+
+#ifdef SDCARD_DEBUG
+		SerialPort.print("Json Recup - ");
+#endif
+	}
+	else
+	{
+		tmpValueString = DEFAULT_TITRE_BATTERIE;
+		MajFileParams = true;
+#ifdef SDCARD_DEBUG
+		SerialPort.print("Defaut Recup - ");
+#endif
+	}
+	TITRE_TAB[TITRE_BATTERIE] = tmpValueString.substring(0, MAX_CAR_TITRE_BATTERIE);
+#ifdef SDCARD_DEBUG
+	SerialPort.print("Index : ");
+	SerialPort.print(TITRE_BATTERIE);
+	SerialPort.print(" - Max car : ");
+	SerialPort.println(MAX_CAR_TITRE_BATTERIE);
+	SerialPort.print("TITRE_BATTERIE : ");
+	SerialPort.println(TITRE_TAB[TITRE_BATTERIE]);
+#endif
+
+	//*****    Stat *****
+
+#ifdef SDCARD_DEBUG
+	SerialPort.println("****** Stat *******");
+#endif
+
+	JsonObject Stat = JSONDOC["stat"];
+
+	if (Stat.containsKey("DUREE"))
+	{
+		const char *Stat_DUREE = Stat["DUREE"];
+#ifdef SDCARD_DEBUG
+		SerialPort.print("Stat_DUREE : ");
+		SerialPort.println(Stat_DUREE);
+#endif
+		tmpValueString = String(Stat_DUREE);
+
+#ifdef SDCARD_DEBUG
+		SerialPort.print("tmpValueString : ");
+		SerialPort.println(tmpValueString);
+#endif
+
+#ifdef SDCARD_DEBUG
+		SerialPort.print("Json Recup - ");
+#endif
+	}
+	else
+	{
+		tmpValueString = DEFAULT_TITRE_STAT_DUREE;
+		MajFileParams = true;
+#ifdef SDCARD_DEBUG
+		SerialPort.print("Defaut Recup - ");
+#endif
+	}
+	TITRE_TAB[TITRE_STAT_DUREE] = tmpValueString.substring(0, MAX_CAR_TITRE_DUREE);
+#ifdef SDCARD_DEBUG
+	SerialPort.print("Index : ");
+	SerialPort.print(TITRE_STAT_DUREE);
+	SerialPort.print(" - Max car : ");
+	SerialPort.println(MAX_CAR_TITRE_DUREE);
+	SerialPort.print("TITRE_STAT_DUREE : ");
+	SerialPort.println(TITRE_TAB[TITRE_STAT_DUREE]);
+#endif
+
+	if (Stat.containsKey("SPEED"))
+	{
+		const char *Stat_SPEED = Stat["SPEED"];
+#ifdef SDCARD_DEBUG
+		SerialPort.print("Stat_SPEED : ");
+		SerialPort.println(Stat_SPEED);
+#endif
+		tmpValueString = String(Stat_SPEED);
+
+#ifdef SDCARD_DEBUG
+		SerialPort.print("tmpValueString : ");
+		SerialPort.println(tmpValueString);
+#endif
+
+#ifdef SDCARD_DEBUG
+		SerialPort.print("Json Recup - ");
+#endif
+	}
+	else
+	{
+		tmpValueString = DEFAULT_TITRE_STAT_SPEED;
+		MajFileParams = true;
+#ifdef SDCARD_DEBUG
+		SerialPort.print("Defaut Recup - ");
+#endif
+	}
+	TITRE_TAB[TITRE_STAT_SPEED] = tmpValueString.substring(0, MAX_CAR_TITRE_VITESSE);
+#ifdef SDCARD_DEBUG
+	SerialPort.print("Index : ");
+	SerialPort.print(TITRE_STAT_SPEED);
+	SerialPort.print(" - Max car : ");
+	SerialPort.println(MAX_CAR_TITRE_VITESSE);
+	SerialPort.print("TITRE_STAT_SPEED : ");
+	SerialPort.println(TITRE_TAB[TITRE_STAT_SPEED]);
+#endif
+
 	// Close the file (Curiously, File's destructor doesn't close the file)
 	file.close();
 
@@ -1130,10 +1353,13 @@ String VarioLanguage::getText(uint8_t value)
 				"REDEMAR": "Redemarrage",
 				"ENCOURS": "en cours",		
 				"CALIBR": "Calibration",
-				"VEILLE": "En veille"
+				"VEILLE": "En veille",
+				"CHARGE": "En Charge",
+				"CHARGER": "Chargée",
+				"BATTERIE": "Batterie"
 		}
 }
 
 
-JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(2) + JSON_OBJECT_SIZE(4) + 2*JSON_OBJECT_SIZE(12)+460
+JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(2) + JSON_OBJECT_SIZE(4) + JSON_OBJECT_SIZE(12) + JSON_OBJECT_SIZE(15)+200
 */

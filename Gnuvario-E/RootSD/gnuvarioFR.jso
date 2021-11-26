@@ -21,7 +21,7 @@
 				"COMPAS": "Compas"
     },
     "message": {
-				"STAT": "Statistique",
+				"STAT": "Statistiques",
 				"DATE": "Date",
 				"HEURE":"Heure",
 				"DUREE": "Duree",
@@ -30,8 +30,11 @@
 				"CONNECTA": "Connexion a ",
 				"DEMAR": "Demarrage",
 				"REDEMAR": "Redemarrage",
-				"ENCOURS": "en cours",		
+				"ENCOURS": "En cours",				
 				"CALIBR": "Calibration",
-				"VEILLE": "En veille"
+				"VEILLE": "En veille",
+				"CHARGE": "en charge",
+				"CHARGER": "chargee",
+				"BATTERIE": "Batterie"
 		}
 }

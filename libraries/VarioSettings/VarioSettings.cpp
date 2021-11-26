@@ -44,25 +44,30 @@
 /*														 SLEEP_THRESHOLD_CPS															 */
 /*														 ALTERNATE_DATA_DURATION													 */
 /*											Ajout saveConfigurationVario / loadConfigurationVario		 */
-/* 		1.1.0	13/11/19		Modification soundSettingRead / soundSettingWrite        */
+/* 		1.1.0	 13/11/19		Modification soundSettingRead / soundSettingWrite        */
 /*                      Ajout lecture et sauvegarde fichier wifi.cfg 						 */
 /*										  Ajout gestion automatique des version fichier params.jso */
 /*										  Modif ALTERNATE_DATA_DURATION - MULTIDISPLAY_DURATION	   */
 /*                      ajout gestion de plusieurs voiles                        */
-/*    1.1.1 24/11/19		Modification SLEEP_THRESHOLD_CPS en float								 */
-/*    1.2   29/11/19    Modification sdfat                                       */
-/*    1.2.1 12/12/19    Ajout set get version et get screenmodel                 */
-/*    1.3   28/12/19    Ajout read log.cfg                                       */ 
-/*    1.3.1 11/01/20		Modif VARIOSCREEN_SIZE == 290														 */
-/*    1.3.2 17/01/20    Ajout DISPLAY_STAT_DURATION - passage en v1.1 					 */
-/*    1.3.3 19/01/20    Ajout DEEPSLEEP_DEBUG                                    */
-/*    1.3.4 04/02/20    Ajout URL_UPDATE passage en version 1.2 de params.json   */
-/*    1.3.5 05/03/20    Ajout DEFAULT_VARIOMETER_ENABLE_AGL											 */
-/*    1.3.6 07/04/20    Ajout ACCELERATION_MEASURE_STANDARD_DEVIATION            */
+/*    1.1.1  24/11/19		Modification SLEEP_THRESHOLD_CPS en float								 */
+/*    1.2    29/11/19   Modification sdfat                                       */
+/*    1.2.1  12/12/19   Ajout set get version et get screenmodel                 */
+/*    1.3    28/12/19   Ajout read log.cfg                                       */ 
+/*    1.3.1  11/01/20		Modif VARIOSCREEN_SIZE == 290														 */
+/*    1.3.2  17/01/20   Ajout DISPLAY_STAT_DURATION - passage en v1.1 					 */
+/*    1.3.3  19/01/20   Ajout DEEPSLEEP_DEBUG                                    */
+/*    1.3.4  04/02/20   Ajout URL_UPDATE passage en version 1.2 de params.json   */
+/*    1.3.5  05/03/20   Ajout DEFAULT_VARIOMETER_ENABLE_AGL											 */
+/*    1.3.6  07/04/20   Ajout ACCELERATION_MEASURE_STANDARD_DEVIATION            */
 /*                      Ajout LANGUAGE																					 */
 /*                      Ajout VARIOMETER_INTEGRATED_CLIMB_RATE                   */
-/*    1.3.7 09/06/20    Ajout VARIOMETER_BLUETOOTH_SEND_CALIBRATED_ALTITUDE      */
+/*    1.3.7  09/06/20   Ajout VARIOMETER_BLUETOOTH_SEND_CALIBRATED_ALTITUDE      */
 /*                      Modification VARIOMETER_SENT_LXNAV_SENTENCE              */
+/*    1.3.8  24/10/20   Ajout REF_VOLTAGE                                        */
+/*    1.3.9  26/10/20   Correction Aleksandr Stroganov <a.stroganov@me.com>      */
+/*    1.3.10 10/11/20   Ajout destructeur                                        */ 
+/*    1.3.9 12/04/21    Ajout MUTE_VARIOBEGIN                                    */
+/*                      Correction bug lecture BEEP_VARIOBEGIN                   */
 /*                                                                               */
 /*********************************************************************************/
 
@@ -99,7 +104,7 @@ boolean VarioSettings::initSettings(bool initSD) {
 	}
 #endif
 	
-	EEPROMHAL.init(1024);
+	EEPROMHAL.init(800); //1024);
   if (!EEPROMHAL.isValid()) {
 #ifdef EEPROM_DEBUG
       SerialPort.println("initialization failed!");
@@ -993,6 +998,7 @@ void VarioSettings::soundSettingWrite(uint8_t volume) {
 //**********************************************************
 void VarioSettings::loadConfigurationVario(char *filename) {
 //**********************************************************
+//DynamicJsonDocument doc(1900);
   // Open file for reading
 	boolean MajFileParams = false;
 #ifdef SDFAT_LIB
@@ -1006,12 +1012,25 @@ void VarioSettings::loadConfigurationVario(char *filename) {
     return;
   }
 
+#ifdef SDCARD_DEBUG
+	SerialPort.printf_P(PSTR("free heap memory: %d\n"), ESP.getFreeHeap());
+#endif
+
 //	const size_t capacity = JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(3) + 2*JSON_OBJECT_SIZE(5) + JSON_OBJECT_SIZE(11) + JSON_OBJECT_SIZE(12) + 790;
 //	const size_t capacity = JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(3) + 3*JSON_OBJECT_SIZE(5) + JSON_OBJECT_SIZE(12) + JSON_OBJECT_SIZE(13) + 1090;
-  const size_t capacity = JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(3) + 3*JSON_OBJECT_SIZE(5) + JSON_OBJECT_SIZE(13) + JSON_OBJECT_SIZE(17) + 1090;
-  DynamicJsonDocument doc(capacity);
+//  const size_t capacity = JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(3) + 3*JSON_OBJECT_SIZE(5) + JSON_OBJECT_SIZE(14) + JSON_OBJECT_SIZE(17) + 1090;
+//  DynamicJsonDocument doc(capacity);
 
+// Clearing Buffer
+	doc.clear();
+
+#ifdef SDCARD_DEBUG
+	SerialPort.printf_P(PSTR("free heap memory: %d\n"), ESP.getFreeHeap());
+#endif
+
+#ifdef SDCARD_DEBUG
   SerialPort.println("deserialisation");
+#endif
 
   // Deserialize the JSON document
   DeserializationError error = deserializeJson(doc, file);
@@ -1023,172 +1042,273 @@ void VarioSettings::loadConfigurationVario(char *filename) {
   long   tmpValueLong;
 	String tmpValueString;
 
+#ifdef SDCARD_DEBUG
   SerialPort.println("Paramètres : ");
+#endif
 
 	const char* GnuvarioE_version = doc["gnuvarioe"]["version"]; // "1.0"
 	if (strcmp(GnuvarioE_version, PARAMS_VERSION) != 0) MajFileParams = true;
 
 	//*****    SYSTEME *****
 
+#ifdef SDCARD_DEBUG
   SerialPort.println("****** Systeme *******");
+#endif
 
   JsonObject Systeme = doc["systeme"];
 	
 	if (Systeme.containsKey("BT_ENABLE")) {
-	     tmpValue = Systeme["BT_ENABLE"];
+	  tmpValue = Systeme["BT_ENABLE"];
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Json Recup - ");
+#endif
 	} else {
 		tmpValue = DEFAULT_VARIOMETER_ENABLE_BT;
 		MajFileParams = true;
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Defaut Recup - ");
+#endif
 	}
   if (tmpValue == 1) VARIOMETER_ENABLE_BT = true;
   else               VARIOMETER_ENABLE_BT = false;
+#ifdef SDCARD_DEBUG
   SerialPort.print("BT_ENABLE : ");
   SerialPort.println(VARIOMETER_ENABLE_BT);
+#endif
     
 	if (Systeme.containsKey("NO_RECORD")) {
-		   tmpValue = Systeme["NO_RECORD"]; 
+		tmpValue = Systeme["NO_RECORD"]; 
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Json Recup - ");
+#endif
 	} else {
 		tmpValue = DEFAULT_NO_RECORD;
 		MajFileParams = true;
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Defaut Recup - ");
+#endif
 	}
   if (tmpValue == 1) NO_RECORD = true;
   else               NO_RECORD = false;
+#ifdef SDCARD_DEBUG
   SerialPort.print("NO_RECORD : ");
   SerialPort.println(NO_RECORD);
+#endif
 
 	if (Systeme.containsKey("ALARM_SDCARD")) {
 		   tmpValue = Systeme["ALARM_SDCARD"];
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Json Recup - ");
+#endif
 	} else {
 		tmpValue = DEFAULT_ALARM_SDCARD;
 		MajFileParams = true;
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Defaut Recup - ");
+#endif
 	}
   if (tmpValue == 1) ALARM_SDCARD = true;
   else               ALARM_SDCARD = false;
+#ifdef SDCARD_DEBUG
   SerialPort.print("ALARM_SDCARD : ");
   SerialPort.println(ALARM_SDCARD);
+#endif
 
 	if (Systeme.containsKey("BEEP_GPSFIX")) {	
 		   tmpValue = Systeme["BEEP_GPSFIX"]; 
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Json Recup - ");
+#endif
 	}	else {
 		tmpValue = DEFAULT_ALARM_GPSFIX;
 		MajFileParams = true;
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Defaut Recup - ");
+#endif
 	}
   if (tmpValue == 1) ALARM_GPSFIX = true;
   else               ALARM_GPSFIX = false;
+#ifdef SDCARD_DEBUG
   SerialPort.print("BEEP_GPSFIX : ");
   SerialPort.println(ALARM_GPSFIX);
+#endif
 
   if (Systeme.containsKey("BEEP_FLYBEGIN")) {	
 	   	 tmpValue = Systeme["BEEP_FLYBEGIN"]; 
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Json Recup - ");
+#endif
 	} else {
 		tmpValue = DEFAULT_ALARM_FLYBEGIN;
 		MajFileParams = true;
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Defaut Recup - ");
+#endif
 	}
   if (tmpValue == 1) ALARM_FLYBEGIN = true;
   else               ALARM_FLYBEGIN = false;
+#ifdef SDCARD_DEBUG
   SerialPort.print("BEEP_FLYBEGIN : ");
   SerialPort.println(ALARM_FLYBEGIN);
+#endif
 
-  if (Systeme.containsKey("BEEP_FLYBEGIN")) {	
+  if (Systeme.containsKey("BEEP_VARIOBEGIN")) {	
 		   tmpValue = Systeme["BEEP_VARIOBEGIN"]; 
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Json Recup - ");
+#endif
 	} else {
 		tmpValue = DEFAULT_ALARM_VARIOBEGIN;
 		MajFileParams = true;
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Defaut Recup - ");
+#endif
 	}
   if (tmpValue == 1) ALARM_VARIOBEGIN = true;
   else               ALARM_VARIOBEGIN = false;
+#ifdef SDCARD_DEBUG
   SerialPort.print("BEEP_VARIOBEGIN : ");
   SerialPort.println(ALARM_VARIOBEGIN);
+#endif
+
+  if (Systeme.containsKey("MUTE_VARIOBEGIN")) {	
+		   tmpValue = Systeme["MUTE_VARIOBEGIN"]; 
+#ifdef SDCARD_DEBUG
+		SerialPort.print("Json Recup - ");
+#endif
+	} else {
+		tmpValue = DEFAULT_MUTE_VARIOBEGIN;
+		MajFileParams = true;
+#ifdef SDCARD_DEBUG
+		SerialPort.print("Defaut Recup - ");
+#endif
+	}
+  if (tmpValue == 1) MUTE_VARIOBEGIN = true;
+  else               MUTE_VARIOBEGIN = false;
+#ifdef SDCARD_DEBUG
+  SerialPort.print("MUTE_VARIOBEGIN : ");
+  SerialPort.println(MUTE_VARIOBEGIN);
+#endif
 
   if (Systeme.containsKey("COMPENSATION_TEMP")) {	
 	 tmpValueFloat = Systeme["COMPENSATION_TEMP"]; 
+#ifdef SDCARD_DEBUG
 	 SerialPort.print("Json Recup - ");
+#endif
 	} else {
 		tmpValueFloat = DEFAULT_COMPENSATION_TEMP;
 		MajFileParams = true;
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Defaut Recup - ");
+#endif
 	}
   COMPENSATION_TEMP = tmpValueFloat;
+#ifdef SDCARD_DEBUG
   SerialPort.print("COMPENSATION_TEMP : ");
   SerialPort.println(COMPENSATION_TEMP);
+#endif
 
   if (Systeme.containsKey("COMPENSATION_GPSALTI")) {	
 		   tmpValue = Systeme["COMPENSATION_GPSALTI"]; 
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Json Recup - ");
+#endif
 	} else {
 		tmpValue = DEFAULT_COMPENSATION_GPSALTI;
 		MajFileParams = true;
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Defaut Recup - ");
+#endif
 	}
   COMPENSATION_GPSALTI = tmpValue;
+#ifdef SDCARD_DEBUG
   SerialPort.print("COMPENSATION_GPSALTI : ");
   SerialPort.println(COMPENSATION_GPSALTI);
+#endif
 
   if (Systeme.containsKey("SLEEP_TIMEOUT_MINUTES")) {	
 		   tmpValue = Systeme["SLEEP_TIMEOUT_MINUTES"];
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Json Recup - ");
+#endif
 	} else {
 		tmpValue = DEFAULT_SLEEP_TIMEOUT_MINUTES;
 		MajFileParams = true;
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Defaut Recup - ");
+#endif
 	}
 	SLEEP_TIMEOUT_MINUTES = tmpValue;
+#ifdef SDCARD_DEBUG
   SerialPort.print("SLEEP_TIMEOUT_MINUTES : ");
   SerialPort.println(SLEEP_TIMEOUT_MINUTES);
+#endif
 	
   if (Systeme.containsKey("SLEEP_THRESHOLD_CPS")) {	
 		   tmpValueFloat = Systeme["SLEEP_THRESHOLD_CPS"];
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Json Recup - ");
+#endif
 	} else {
 		tmpValueFloat = DEFAULT_SLEEP_THRESHOLD_CPS;
 		MajFileParams = true;
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Defaut Recup - ");
+#endif
 	}
 	SLEEP_THRESHOLD_CPS = tmpValueFloat;
+#ifdef SDCARD_DEBUG
   SerialPort.print("SLEEP_THRESHOLD_CPS : ");
   SerialPort.println(SLEEP_THRESHOLD_CPS);
+#endif
 	
 	if (Systeme.containsKey("MULTIDISPLAY_DURATION")) {
 	     tmpValue = Systeme["MULTIDISPLAY_DURATION"];
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Json Recup - ");
+#endif
 	}
 	else {
 		tmpValue = VARIOMETER_MULTIDISPLAY_DURATION;
 		MajFileParams = true;
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Defaut Recup - ");
+#endif
 	}
 	VARIOMETER_MULTIDISPLAY_DURATION = tmpValue; 
+#ifdef SDCARD_DEBUG
   SerialPort.print("MULTIDISPLAY_DURATION : ");
   SerialPort.println(VARIOMETER_MULTIDISPLAY_DURATION);
+#endif
 
   if (Systeme.containsKey("DISPLAY_STAT_DURATION")) {	
 		   tmpValue = Systeme["DISPLAY_STAT_DURATION"];
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Json Recup - ");
+#endif
 	} else {
 		tmpValue = DEFAULT_DISPLAY_STAT_DURATION;
 		MajFileParams = true;
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Defaut Recup - ");
+#endif
 	}
 	DISPLAY_STAT_DURATION = tmpValue;
+#ifdef SDCARD_DEBUG
   SerialPort.print("DISPLAY_STAT_DURATION : ");
   SerialPort.println(DISPLAY_STAT_DURATION);
+#endif
 
   if (Systeme.containsKey("URL_UPDATE")) {	
 		String Systeme_URL_UPDATE = Systeme["URL_UPDATE"];
 		tmpValueString = Systeme_URL_UPDATE;
+#ifdef SDCARD_DEBUG
 		SerialPort.print("Json Recup - ");
+#endif
+
+//**************************************
+//*****************************************
+
 	} else {
 		tmpValueString = DEFAULT_URL_UPDATE;
 		MajFileParams = true;
@@ -1209,6 +1329,18 @@ void VarioSettings::loadConfigurationVario(char *filename) {
   LANGUAGE = tmpValue;
   SerialPort.print("LANGUAGE : ");
   SerialPort.println(LANGUAGE);
+
+	if (Systeme.containsKey("REF_VOLTAGE")) {
+		     tmpValue = Systeme["REF_VOLTAGE"]; 
+		SerialPort.print("Json Recup - ");
+	} else {
+		tmpValue = DEFAULT_REF_VOLTAGE;
+		MajFileParams = true;																		
+		SerialPort.print("Defaut Recup - ");
+	}
+  REF_VOLTAGE = tmpValue;
+  SerialPort.print("REF_VOLTAGE : ");
+  SerialPort.println(REF_VOLTAGE);
 
 	//*****    GENERAL *****
 
@@ -1240,7 +1372,7 @@ void VarioSettings::loadConfigurationVario(char *filename) {
 		SerialPort.print("Defaut Recup - ");
 	}
   VARIOMETER_GLIDER_SELECT = tmpValue;
-  SerialPort.print("Time Zone : ");
+  SerialPort.print("Glider Select : ");
   SerialPort.println(VARIOMETER_GLIDER_SELECT);  
 	
 	if (General_GLIDER.containsKey("GLIDER_NAME1")) {
@@ -1643,6 +1775,15 @@ void VarioSettings::loadConfigurationVario(char *filename) {
   // Close the file (Curiously, File's destructor doesn't close the file)
   file.close();
 	
+	SerialPort.printf_P(PSTR("free heap memory: %d\n"), ESP.getFreeHeap());
+// Clearing Buffer
+	doc.clear();
+
+// Trying To Delete The Document
+//	doc.delete();
+//	doc.~BasicJsonDocument();
+	SerialPort.printf_P(PSTR("free heap memory: %d\n"), ESP.getFreeHeap());
+	
 	//Mise à jour du fichier params.jso
 	if (MajFileParams) {
 		SerialPort.println("Sauvegarde de nouveaux paramètres");
@@ -1656,6 +1797,7 @@ void VarioSettings::loadConfigurationVario(char *filename) {
 //**********************************************************
 void VarioSettings::saveConfigurationVario(char *filename) {
 //**********************************************************
+//DynamicJsonDocument doc(1900);
   // Delete existing file, otherwise the configuration is appended to the file
   SDHAL_SD.remove(filename);
 
@@ -1672,14 +1814,18 @@ void VarioSettings::saveConfigurationVario(char *filename) {
   }
 
   SerialPort.println("****** SAUVEGARDE params.jso *******");
+	SerialPort.printf_P(PSTR("free heap memory: %d\n"), ESP.getFreeHeap());
 
   // Allocate a temporary JsonDocument
   // Don't forget to change the capacity to match your requirements.
   // Use arduinojson.org/assistant to compute the capacity.
 //	const size_t capacity = JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(3) + 2*JSON_OBJECT_SIZE(5) + JSON_OBJECT_SIZE(11) + JSON_OBJECT_SIZE(12) + 790;
 //	const size_t capacity = JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(3) + 3*JSON_OBJECT_SIZE(5) + JSON_OBJECT_SIZE(12) + JSON_OBJECT_SIZE(13) + 1090;
-  const size_t capacity = JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(3) + 3*JSON_OBJECT_SIZE(5) + JSON_OBJECT_SIZE(13) + JSON_OBJECT_SIZE(17) + 1090;
-	DynamicJsonDocument doc(capacity);
+//  const size_t capacity = JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(3) + 3*JSON_OBJECT_SIZE(5) + JSON_OBJECT_SIZE(14) + JSON_OBJECT_SIZE(17) + 1090;
+//	DynamicJsonDocument doc(capacity);
+
+// Clearing Buffer
+	doc.clear();
 
   SerialPort.println("****** GnuvarioE *******");
 
@@ -1711,6 +1857,9 @@ void VarioSettings::saveConfigurationVario(char *filename) {
   if (ALARM_VARIOBEGIN) Systeme["BEEP_VARIOBEGIN"] = 1;
   else                  Systeme["BEEP_VARIOBEGIN"] = 0;
 
+  if (MUTE_VARIOBEGIN) Systeme["MUTE_VARIOBEGIN"] = 1;
+  else                  Systeme["MUTE_VARIOBEGIN"] = 0;
+
 	
 	Systeme["COMPENSATION_TEMP"] = COMPENSATION_TEMP;
 
@@ -1727,6 +1876,8 @@ void VarioSettings::saveConfigurationVario(char *filename) {
 	Systeme["URL_UPDATE"] = URL_UPDATE;
 
 	Systeme["LANGUAGE"] = LANGUAGE;
+
+	Systeme["REF_VOLTAGE"] = REF_VOLTAGE;
 		
 	//*****    GENERAL *****
 
@@ -1851,6 +2002,9 @@ void VarioSettings::saveConfigurationVario(char *filename) {
 
   // Close the file
   file.close();
+// Clearing Buffer
+	doc.clear();
+	SerialPort.printf_P(PSTR("free heap memory: %d\n"), ESP.getFreeHeap());
 }
 
 
@@ -1873,9 +2027,9 @@ String VarioSettings::getScreenModel(void) {
 #if (VARIOSCREEN_SIZE == 154)
 	return "154";
 #elif (VARIOSCREEN_SIZE == 290)
-	return "154";
+	return "290";
 #elif (VARIOSCREEN_SIZE == 213)
-	return "154";
+	return "213";
 #else 
 	return "";
 #endif
@@ -1988,13 +2142,15 @@ double Statistic::getGain(void) {
         "BEEP_GPSFIX": 1,
         "BEEP_FLYBEGIN": 1,
 				"BEEP_VARIOBEGIN": 0,
+				"MUTE_VARIOBEGIN": 0,
 				"COMPENSATION_TEMP": -6.1,
 				"COMPENSATION_GPSALTI": -70,
 				"SLEEP_TIMEOUT_MINUTES": 20,
 				"SLEEP_THRESHOLD_CPS": 50,
 				"ALTERNATE_DATA_DURATION": 2000,
 				"URL_UPDATE": "http://gnuvario-e.yj.fr/webupdate/checkversion",
-				"LANGUAGE": 0
+				"LANGUAGE": 0,
+				"REF_VOLTAGE": 2280
     },
     "General": {
         "PILOT_NAME": "MagaliXXXXXXXXXXXXXX",
@@ -2024,7 +2180,7 @@ double Statistic::getGain(void) {
 				"ACCELERATION_MEASURE_STANDARD_DEVIATION": 0.35,
 				"VARIOMETER_INTEGRATED_CLIMB_RATE": 0,
 				"SETTINGS_VARIO_PERIOD_COUNT":5,
-				"BLUETOOTH_SEND_CALIBRATED_ALTITUDE":0,
+				"BLUETOOTH_SEND_CALIBRATED_ALTITUDE":0
    },
     "Flight start": {
         "FLIGHT_START_MIN_TIMESTAMP": 15000,

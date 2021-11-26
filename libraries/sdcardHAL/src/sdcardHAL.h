@@ -51,6 +51,8 @@ class SdCardHAL {
   public:
 
 	  boolean begin(void);
+		boolean end(void);
+		static void deleteRecursive(String path);
 };
 
 extern SdFatSoftSpi<SOFT_MISO_PIN, SOFT_MOSI_PIN, SOFT_SCK_PIN> SDHAL_SD;
@@ -66,6 +68,8 @@ class SdCardHAL { //public SDClass {
   public:
 
 	  boolean begin(void);
+		boolean end(void);
+		static void deleteRecursive(String path);
 };
 
 #define SDHAL_SD SD

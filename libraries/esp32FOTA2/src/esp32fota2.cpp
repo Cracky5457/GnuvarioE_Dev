@@ -16,6 +16,7 @@
  *    1.0.2  06/02/20   Ajout downloadWwwFiles()                                 *         
  *    1.0.3             Ajout downloadWwwFiles                                   *
  *    1.0.4  10/02/20   Ajout UpdateWwwDirectory                                 *
+ *    1.0.5  13/03/21   Mise à jour ESP32-targz                                  *
  *                                                                               *
  *********************************************************************************/
 
@@ -23,6 +24,12 @@
 #include "esp_log.h"
 
 #include <HardwareConfig.h>
+
+#define JSONDOCEXTERN
+
+#ifdef JSONDOCEXTERN
+#include <VarioSettings.h>
+#endif
 
 #ifdef WIFI_DEBUG
 #define ARDUINOTRACE_ENABLE 1
@@ -43,6 +50,10 @@
 #include <WiFiClientSecure.h>
 
 #include <varioscreenGxEPD.h>
+
+#define DEST_FS_USES_SDHAL
+
+#include "ESP32-targz.h"
 
 #ifdef HAVE_SDCARD
 #include <sdcardHAL.h>
@@ -123,6 +134,7 @@ esp32FOTA2::esp32FOTA2(String firwmareType, int firwmareVersion, int firwmareSub
     _firwmareSubVersion = firwmareSubVersion;
     _firwmareBetaVersion = firwmareBetaVersion;
     useDeviceID = false;
+    _gzwwwfile = "";
 }
 
 // Utility to extract header value from headers
@@ -155,6 +167,13 @@ void esp32FOTA2::execOTA()
     if (NB_WWW_FILES > 0)
     {
         downloadWwwFiles();
+    }
+#endif
+
+#ifdef HAVE_SDCARD
+    if (_gzwwwfile != "")
+    {
+        downloadGzwwwFile();
     }
 #endif
 
@@ -512,8 +531,15 @@ uint8_t esp32FOTA2::execHTTPcheck(bool betaVersion)
             //SerialPort.println(JSONMessage);
 #endif
 
+#ifndef JSONDOCEXTERN
             StaticJsonDocument<1300> JSONDocument; //Memory pool
-            DeserializationError err = deserializeJson(JSONDocument, JSONMessage);
+#define JSONDOC JSONDocument
+#else
+#define JSONDOC GnuSettings.doc
+            // Clearing Buffer
+            JSONDOC.clear();
+#endif
+            DeserializationError err = deserializeJson(JSONDOC, JSONMessage);
 
             if (err)
             { //Check for errors in parsing
@@ -533,32 +559,32 @@ uint8_t esp32FOTA2::execHTTPcheck(bool betaVersion)
             SerialPort.println(tmp);
 #endif
 
-            if (JSONDocument.containsKey(tmp))
+            if (JSONDOC.containsKey(tmp))
             {
-                JsonObject JSONDocumentUpdate = JSONDocument[tmp];
+                JsonObject JSONDOCUpdate = JSONDOC[tmp];
 
-                //const char *pltype = JSONDocument["type"];
-                int plversion = JSONDocumentUpdate["version"];
+                //const char *pltype = JSONDOC["type"];
+                int plversion = JSONDOCUpdate["version"];
                 UpdateVersion = plversion;
 
-                int plsubversion = JSONDocumentUpdate["subversion"];
+                int plsubversion = JSONDOCUpdate["subversion"];
                 UpdateSubVersion = plsubversion;
 
-                int plbetaversion = JSONDocumentUpdate["betaversion"];
+                int plbetaversion = JSONDOCUpdate["betaversion"];
                 UpdateBetaVersion = plbetaversion;
 
-                const char *plhost = JSONDocumentUpdate["host"];
-                _port = JSONDocumentUpdate["port"];
+                const char *plhost = JSONDOCUpdate["host"];
+                _port = JSONDOCUpdate["port"];
 
                 NB_WWW_FILES = 0;
 
-                if (JSONDocumentUpdate.containsKey("www"))
+                if (JSONDOCUpdate.containsKey("www"))
                 {
 
 #ifdef WIFI_DEBUG
                     SerialPort.println("la section du fichier json contient la clé www");
 #endif
-                    JsonArray myArray = JSONDocumentUpdate["www"].as<JsonArray>();
+                    JsonArray myArray = JSONDOCUpdate["www"].as<JsonArray>();
 
                     for (JsonVariant myValue : myArray)
                     {
@@ -568,6 +594,17 @@ uint8_t esp32FOTA2::execHTTPcheck(bool betaVersion)
                         _wwwfiles[NB_WWW_FILES] = myValue.as<char *>();
                         NB_WWW_FILES++;
                     }
+                }
+
+                if (JSONDOCUpdate.containsKey("gzwww"))
+                {
+
+#ifdef WIFI_DEBUG
+                    SerialPort.println("la section du fichier json contient la clé www");
+#endif
+
+                    const char *gzwww = JSONDOCUpdate["gzwww"];
+                    _gzwwwfile = String(gzwww);
                 }
 
 #ifdef WIFI_DEBUG
@@ -584,7 +621,7 @@ uint8_t esp32FOTA2::execHTTPcheck(bool betaVersion)
                 SerialPort.println(_port);
 #endif
 
-                const char *plbin = JSONDocumentUpdate["bin"];
+                const char *plbin = JSONDOCUpdate["bin"];
 
                 String jshost(plhost);
                 String jsbin(plbin);
@@ -720,8 +757,16 @@ uint8_t esp32FOTA2::execHTTPScheck(bool betaVersion)
             char JSONMessage[str_len];
             payload.toCharArray(JSONMessage, str_len);
 
+#ifndef JSONDOCEXTERN
             StaticJsonDocument<1300> JSONDocument; //Memory pool
-            DeserializationError err = deserializeJson(JSONDocument, JSONMessage);
+#define JSONDOC JSONDocument
+#else
+#define JSONDOC GnuSettings.doc
+            // Clearing Buffer
+            JSONDOC.clear();
+#endif
+
+            DeserializationError err = deserializeJson(JSONDOC, JSONMessage);
 
             if (err)
             { //Check for errors in parsing
@@ -732,11 +777,11 @@ uint8_t esp32FOTA2::execHTTPScheck(bool betaVersion)
                 return false;
             }
 
-            const char *pltype = JSONDocument["type"];
-            int plversion = JSONDocument["version"];
-            const char *plhost = JSONDocument["host"];
-            _port = JSONDocument["port"];
-            const char *plbin = JSONDocument["bin"];
+            const char *pltype = JSONDOC["type"];
+            int plversion = JSONDOC["version"];
+            const char *plhost = JSONDOC["host"];
+            _port = JSONDOC["port"];
+            const char *plbin = JSONDOC["bin"];
 
             String jshost(plhost);
             String jsbin(plbin);
@@ -971,6 +1016,107 @@ void esp32FOTA2::downloadWwwFiles()
 }
 
 //************************************
+void esp32FOTA2::downloadGzwwwFile()
+//************************************
+{
+    TRACE();
+
+#ifdef WIFI_DEBUG
+    SerialPort.println("[HTTP] Debut méthode downloadGzwwwFile");
+#endif
+    // File system object.
+    // Directory file.
+    File root;
+
+    HTTPClient http;
+    String myfilename = "/www.gz";
+
+    http.begin(_host.c_str(), _port, _gzwwwfile);
+
+    // start connection and send HTTP header
+    int httpCode = http.GET();
+    if (httpCode > 0)
+    {
+        // HTTP header has been send and Server response header has been handled
+#ifdef WIFI_DEBUG
+        SerialPort.println("[HTTP] GET... code: " + String(httpCode));
+#endif
+
+        // file found at server
+        if (httpCode == HTTP_CODE_OK)
+        {
+
+            File myFile;
+            myFile = SDHAL_SD.open(myfilename.c_str(), FILE_WRITE);
+
+            if (!myFile)
+            {
+#ifdef WIFI_DEBUG
+                SerialPort.print("Impossible de créer le fichier : ");
+                SerialPort.println(myfilename);
+#endif
+                return;
+            }
+
+#ifdef WIFI_DEBUG
+            SerialPort.print("[HTTP] Début écriture");
+            SerialPort.println(myfilename);
+#endif
+            // get lenght of document (is -1 when Server sends no Content-Length header)
+            int len = http.getSize();
+
+            // create buffer for read
+            uint8_t buff[128] = {0};
+
+            // get tcp stream
+            WiFiClient *stream = http.getStreamPtr();
+
+            // read all data from server
+            while (http.connected() && (len > 0 || len == -1))
+            {
+                // get available data size
+                size_t size = stream->available();
+
+                if (size)
+                {
+                    // read up to 128 byte
+                    int c = stream->readBytes(buff, ((size > sizeof(buff)) ? sizeof(buff) : size));
+
+                    // ICI l'ecriture dans le fichier
+                    //USE_SERIAL.write(buff, c);
+                    myFile.write(buff, c);
+                    myFile.flush();
+
+                    if (len > 0)
+                    {
+                        len -= c;
+                    }
+                }
+                delay(1);
+            }
+
+            myFile.close();
+#ifdef WIFI_DEBUG
+            SerialPort.print("[HTTP] Fin écriture");
+            SerialPort.println(myfilename);
+#endif
+
+#ifdef WIFI_DEBUG
+            SerialPort.println("[HTTP] connection closed or file end.");
+#endif
+        }
+    }
+    else
+    {
+#ifdef WIFI_DEBUG
+        SerialPort.println("[HTTP] GET... failed, error:" + String(http.errorToString(httpCode).c_str()));
+#endif
+    }
+
+    http.end();
+}
+
+//************************************
 bool esp32FOTA2::UpdateWwwDirectory()
 //************************************
 {
@@ -984,10 +1130,10 @@ bool esp32FOTA2::UpdateWwwDirectory()
     // Directory file.
     File root;
 
-    String newPath = "/wwwnew";
+    String tmpPath = "/wwwnew";
     //		String oldPath = "";
-    DUMP(newPath.c_str());
-    if (SDHAL_SD.exists(newPath.c_str()))
+    DUMP(tmpPath.c_str());
+    if (SDHAL_SD.exists(tmpPath.c_str()))
     {
 #ifdef WIFI_DEBUG
         SerialPort.println("[HTTP] le dossier wwwnew existe");
@@ -995,55 +1141,15 @@ bool esp32FOTA2::UpdateWwwDirectory()
 
         // Traitement du fichier wwwnew
 
-        newPath = "/wwwold";
-        if (SDHAL_SD.exists(newPath.c_str()))
+        tmpPath = "/wwwold";
+        if (SDHAL_SD.exists(tmpPath.c_str()))
         {
 #ifdef WIFI_DEBUG
             SerialPort.println("[HTTP] le dossier wwwold existe");
 #endif
 
-            File root;
-            File file;
-
-            if (!(root = SDHAL_SD.open("/wwwold")))
-            {
-#ifdef WIFI_DEBUG
-                SerialPort.println("[HTTP] impossible d'ouvrir le dossier wwwold");
-#endif
-                return false;
-            }
-            // Open next file in root.
-            // Warning, openNext starts at the current directory position
-            // so a rewind of the directory may be required.
-            while (file = root.openNextFile(FILE_READ))
-            {
-
-#ifdef WIFI_DEBUG
-
-                SerialPort.print("[HTTP] suppression du fichier : <");
-                SerialPort.print(file.name());
-                SerialPort.println(">");
-#endif
-                String tmpFilenameToDel = file.name();
-                file.close();
-
-                if (!SDHAL_SD.remove((char *)tmpFilenameToDel.c_str()))
-                {
-#ifdef WIFI_DEBUG
-                    SerialPort.println("[HTTP] le fichier n'a pas pu être supprimé");
-#endif
-                }
-            }
-
-            //Effacement du repertoire wwwold
-
-            if (!SDHAL_SD.rmdir(newPath.c_str()))
-            {
-#ifdef WIFI_DEBUG
-                SerialPort.println("[HTTP] le dossier wwwold n'a pas pu être supprimé");
-#endif
-                return false; //Pas de mise à jour
-            }
+            //suppression de wwwold si existe
+            SdCardHAL::deleteRecursive(tmpPath);
         }
 
         // rename "www" into "wwwold"
@@ -1074,6 +1180,91 @@ bool esp32FOTA2::UpdateWwwDirectory()
         return false; //Pas de mise à jour
     }
     return false; //Pas de mise à jour
+}
+
+//************************************
+int8_t esp32FOTA2::UpdateWwwDirectoryFromGz()
+//************************************
+{
+#ifdef WIFI_DEBUG
+    SerialPort.println("[HTTP] Debut méthode UpdateWwwDirectoryFromGz");
+#endif
+    TarGzUnpacker *TARGZUnpacker = new TarGzUnpacker();
+
+    TARGZUnpacker->haltOnError(true);  // stop on fail (manual restart/reset required)
+    TARGZUnpacker->setTarVerify(true); // true = enables health checks but slows down the overall process
+
+    TARGZUnpacker->setTarStatusProgressCallback(BaseUnpacker::defaultTarStatusProgressCallback); // print the filenames as they're expanded
+                                                                                                 //  TARGZUnpacker->setupFSCallbacks( targzTotalBytesFn, targzFreeBytesFn ); // prevent the partition from exploding, recommended
+    TARGZUnpacker->setGzProgressCallback(BaseUnpacker::defaultProgressCallback);                 // targzNullProgressCallback or defaultProgressCallback
+    TARGZUnpacker->setLoggerCallback(BaseUnpacker::targzPrintLoggerCallback);                    // gz log verbosity
+    TARGZUnpacker->setTarProgressCallback(BaseUnpacker::defaultProgressCallback);                // prints the untarring progress for each individual file
+                                                                                                 //  TARGZUnpacker->setTarMessageCallback( myTarMessageCallback/*BaseUnpacker::targzPrintLoggerCallback*/ ); // tar log verbosity
+
+    String myfilename = "/www.gz";
+    String origRep = "/www";
+
+    if (!SDHAL_SD.exists(myfilename.c_str()))
+    {
+//rien à faire
+#ifdef WIFI_DEBUG
+        SerialPort.println("[HTTP] Fichier www.gz introuvable");
+#endif
+        return 0;
+    }
+
+    screen.ScreenViewMessage("MAJ www", 0);
+
+    //backup de l'ancien répertoire www
+    String tmpPath = "/wwwold";
+
+    if (SDHAL_SD.exists(tmpPath.c_str()))
+    {
+#ifdef WIFI_DEBUG
+        SerialPort.println("[HTTP] le dossier wwwold existe");
+#endif
+
+        //suppression de wwwold si existe
+        SdCardHAL::deleteRecursive(tmpPath);
+    }
+
+    if (SDHAL_SD.exists(origRep.c_str()))
+    {
+        // rename "www" into "wwwold"
+        if (!SDHAL_SD.rename("/www", "/wwwold"))
+        {
+#ifdef WIFI_DEBUG
+            SerialPort.println("[HTTP] le dossier www ne peut être renommé en wwwold");
+#endif
+            return -1; //Pas de mise à jour
+        }
+    }
+
+    //decompression de l'archive dans /www
+    if (TARGZUnpacker->tarGzExpander(SD, (char *)myfilename.c_str(), SD, "/"))
+    {
+#ifdef WIFI_DEBUG
+        SerialPort.println("Decompression dand /www");
+#endif
+    }
+    else
+    {
+#ifdef WIFI_DEBUG
+        SerialPort.println("Echec decompression dand /www");
+#endif
+        return -1;
+    }
+
+    //suppression de l'archive
+    if (!SDHAL_SD.remove((char *)myfilename.c_str()))
+    {
+#ifdef WIFI_DEBUG
+        SerialPort.println("[HTTP] le fichier n'a pas pu être supprimé");
+#endif
+        return -1;
+    }
+
+    return 1;
 }
 
 /*{

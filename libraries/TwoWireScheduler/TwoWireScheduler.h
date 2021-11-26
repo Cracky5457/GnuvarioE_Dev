@@ -26,6 +26,13 @@
 /*  1.1     21/08/19     Ajout getTempAlti(double& temp, double& alti)                             */
 /*  1.2     04/09/19		 Modification nom bibliothèque MS5611                                      */
 /*  1.3     15/11/19     modif delayMicroseconds(400);                                             */
+/*  1.4     24/09/20     Modif calcul Nord magnetique - ajout gyroscope                            */
+/*  1.4.1   25/09/20     Ajout debug                                                               */
+/*  1.4.2   06/10/20     Ajout void TWScheduler::disableAcquisition()                              */
+/*  1.4.3   09/10/20     Correction disableAcquisition                                             */
+/*  1.4.4   22/10/20     alti < 0 --> alti = 0                                                     */
+/*  1.4.5   06/04/21     Ajout computeAltitude2                                                    */
+/*                       Modification getalti                                                      */
 /*                                                                                                 */
 /***************************************************************************************************/
 
@@ -123,13 +130,15 @@ class TWScheduler {
 #else  
   static Ms5611 ms5611;
 #endif
-  
+  	
 #ifdef HAVE_ACCELEROMETER
   static Vertaccel vertaccel;
 #endif
 
   /* init both devices but not the TW bus */
   static void init(void);
+	
+  void disableAcquisition(void);
 
   /* barometer part */
   static bool havePressure(void);
@@ -149,11 +158,15 @@ class TWScheduler {
   static bool haveNewGyro(void);
   static bool resetNewGyro(void);
 	static void getRawGyro(int16_t* rawGyro, int32_t* quat);
+	
+	static void getRawAccelGyro(int16_t* rawAccel, int16_t* rawGyro, int32_t* quat);
+	static void getAccelGyro(double* vertVector, double* gyroVector);
 
 #ifdef AK89xx_SECONDARY
   static bool haveMag(void);
   static void getRawMag(int16_t* rawMag);
   static void getNorthVector(double* vertVector, double* northVector); //give the vertVector obtained previously
+  static void getNorthVector2(double* vertVector, double* gyroVector, double* northVector); //give the vertVector and gyroVector obtained previously
 #endif //AK89xx_SECONDARY
 #endif //HAVE_ACCELEROMETER
   
@@ -162,6 +175,7 @@ class TWScheduler {
 
  private:
   static uint16_t volatile status;
+
 #ifdef HAVE_BMP280 
   static uint8_t volatile bmp280Output[2*3];  //two bmp280 output measures
   static uint8_t volatile bmp280Count;
@@ -171,6 +185,7 @@ class TWScheduler {
   static uint8_t volatile ms5611Output[3*3];  //three ms5611 output measures
   static uint8_t volatile ms5611Count;
   static SemaphoreHandle_t ms5611Mutex;
+	static double ms5611SavePressure;
 #endif
 #ifdef HAVE_ACCELEROMETER
   static uint8_t volatile checkOutput[2];

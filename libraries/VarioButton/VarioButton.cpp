@@ -49,6 +49,8 @@
  *    1.0.15 09/03/20   Modification ScreenViewSound                             	*
  *    1.0.16 10/03/20   Ajout Bouton A 2sec calibration via AGL         					*
  *                      Ajout déclenchement debut du vol (appuie sur bouton A     *
+ *    1.0.17 18/10/20   Ajout Page charge batterie sur bouton central (init)      *
+ *    1.0.18 10/11/20   Correction bug                                            *
  *                                                                               	*
  ************************************************************************************/
 
@@ -66,7 +68,7 @@
 #include <beeper.h>
 #include <varioscreenGxEPD.h>
 #ifdef HAVE_WIFI
-#include <VarioWifiServer.h>
+// #include <VarioWifiServer.h>
 #endif //HAVE_WIFI
 
 #include <Utility.h>
@@ -95,6 +97,8 @@
 
 #include <VarioLanguage.h>
 
+#include <VarioWifi.h>
+VarioWifi wf;
 uint8_t RegVolume;
 
 /*#define VARIOMETER_STATE_INITIAL 0
@@ -179,7 +183,7 @@ void VARIOButtonScheduleur::update()
 				int aglLevel = varioData.aglManager.getAgl();
 				GnuSettings.COMPENSATION_GPSALTI = aglLevel;
 
-				char tmpchar[20] = "params.jso";
+				char tmpchar[20] = "/params.jso";
 				GnuSettings.saveConfigurationVario(tmpchar);
 
 				beeper.generateTone(523, 250);
@@ -187,8 +191,10 @@ void VARIOButtonScheduleur::update()
 				beeper.generateTone(784, 250);
 				beeper.generateTone(1046, 250);
 			}
+			
 		}
 #endif
+		treatmentBtnA2S(false);			
 		_stateBA = false;
 	}
 
@@ -345,7 +351,7 @@ void VARIOButtonScheduleur::treatmentBtnA(bool Debounce)
 			//			toneHAL.setVolume(tmpvol);
 			//			beeper.setVolume(tmpvol);
 			RegVolume = tmpvol;
-			beeper.generateTone(2000, 300, RegVolume);
+			beeper.generateTone(500, 300, RegVolume);
 			screen.SetViewSound(RegVolume); //toneHAL.getVolume());
 		}
 	}
@@ -355,15 +361,6 @@ void VARIOButtonScheduleur::treatmentBtnA(bool Debounce)
 		//    TRACELOG(LOG_TYPE_DEBUG, DEEPSLEEP_DEBUG_LOG);
 		MESSLOG(LOG_TYPE_DEBUG, DEEPSLEEP_DEBUG_LOG, "Deep sleep - Bouton");
 		deep_sleep(varioLanguage.getText(TITRE_VEILLE)); //"En veille");
-	}
-	else if (StatePage == STATE_PAGE_CALIBRATE)
-	{
-		//sortie calibration
-		SerialPort.println("RESTART ESP32");
-		SerialPort.flush();
-		ESP_LOGI("GnuVario-E", "RESTART ESP32");
-		screen.ScreenViewReboot();
-		ESP.restart();
 	}
 }
 
@@ -378,7 +375,7 @@ void VARIOButtonScheduleur::treatmentBtnB(bool Debounce)
 		if (screen.schedulerScreen->getPage() == screen.schedulerScreen->getMaxPage() + 1)
 		{
 			StatePage = STATE_PAGE_CONFIG_SOUND;
-			RegVolume = toneHAL.getVolume();
+			RegVolume = beeper.getVolume(); //toneHAL.getVolume();
 			screen.SetViewSound(RegVolume);
 		}
 		else
@@ -396,7 +393,7 @@ void VARIOButtonScheduleur::treatmentBtnB(bool Debounce)
 	{
 		StatePage = STATE_PAGE_VARIO;
 		screen.SetViewSound(RegVolume);
-		toneHAL.setVolume(RegVolume);
+		beeper.setVolume(RegVolume); //toneHAL.setVolume(RegVolume);
 		GnuSettings.soundSettingWrite(RegVolume);
 		screen.volLevel->setVolume(RegVolume);
 		screen.volLevel->mute(toneHAL.isMute());
@@ -408,6 +405,16 @@ void VARIOButtonScheduleur::treatmentBtnB(bool Debounce)
 		screen.ScreenViewMessage(varioLanguage.getText(TITRE_ENCOURS), 0); //"en cours", 0);
 		Calibration.Begin();
 	}
+	else if (StatePage == STATE_PAGE_INIT)
+	{
+		StatePage = STATE_PAGE_CHARGE;
+		varioHardwareManager.varioPower.ScreenCharge();
+		StatePage = STATE_PAGE_INIT;
+	}
+	else if (StatePage == STATE_PAGE_CHARGE)
+	{
+		varioHardwareManager.varioPower.setRefVoltage(varioHardwareManager.varioPower.getVoltage());
+	}	
 }
 
 /************************************************************/
@@ -444,7 +451,7 @@ void VARIOButtonScheduleur::treatmentBtnC(bool Debounce)
 			//			toneHAL.setVolume(tmpvol);
 			//			beeper.setVolume(tmpvol);
 			RegVolume = tmpvol;
-			beeper.generateTone(2000, 300, RegVolume);
+			beeper.generateTone(500, 300, RegVolume);
 			screen.SetViewSound(RegVolume); //toneHAL.getVolume());
 		}
 	}
@@ -473,7 +480,7 @@ void VARIOButtonScheduleur::WifiServeur(void)
 	root = SDHAL_SD.open("/");
 	if (root)
 	{
-#endif //SDFAT_LIB \
+#endif //SDFAT_LIB 
 	//printDirectory(root, 0);
 		root.close();
 	}
@@ -489,16 +496,19 @@ void VARIOButtonScheduleur::WifiServeur(void)
 #endif //BUTTON_DEBUG
 
 	/*START SERVEUR WEB */
-	varioWifiServer.begin();
-	varioWifiServer.connect();
+	TaskHandle_t taskWF;
+	xTaskCreatePinnedToCore(startWifi, "VWF", 10000, NULL, 2, &taskWF, 0);
 
-	varioWifiServer.start();
+//	varioWifiServer.begin();
+//	varioWifiServer.connect();
+
+//	varioWifiServer.start();
 
 	Set_StatePage(STATE_PAGE_WEBSERV);
 
 	while (1)
 	{
-		varioWifiServer.handleClient();
+//		varioWifiServer.handleClient();
 		update();
 	}
 }
@@ -598,6 +608,37 @@ void VARIOButtonScheduleur::treatmentBtnB3S(bool Debounce)
 		StatePage = STATE_PAGE_VARIO;
 		screen.ScreenViewPage(screen.schedulerScreen->getPage(), true);
 		screen.updateScreen();
+	}
+}
+
+/**********************************************************/
+void VARIOButtonScheduleur::treatmentBtnA2S(bool Debounce)
+{
+	/**********************************************************/
+	if (StatePage == STATE_PAGE_CALIBRATE)
+	{
+		//sortie calibration
+		SerialPort.println("RESTART ESP32");
+		SerialPort.flush();
+		ESP_LOGI("GnuVario-E", "RESTART ESP32");
+		screen.ScreenViewReboot();
+		ESP.restart();
+	}
+}
+
+/**********************************************************/
+void VARIOButtonScheduleur::startWifi(void *pvParameters)
+/**********************************************************/
+{
+	Serial.println("Free heap BEFORE wifi start");
+	Serial.println(ESP.getFreeHeap());
+	wf.begin();
+	Serial.println("Free heap AFTER wifi start");
+	Serial.println(ESP.getFreeHeap());
+	for (;;)
+	{
+		const TickType_t delay = (10000) / portTICK_PERIOD_MS;
+		vTaskDelay(delay);
 	}
 }
 

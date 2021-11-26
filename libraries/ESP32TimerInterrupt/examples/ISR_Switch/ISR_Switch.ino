@@ -1,36 +1,42 @@
 /****************************************************************************************************************************
-   ISR_Switch.ino
-   For ESP32 boards
-   Written by Khoi Hoang
-
-   Built by Khoi Hoang https://github.com/khoih-prog/ESP32TimerInterrupt
-   Licensed under MIT license
-   Version: 1.0.3
-
-   The ESP32 has two timer groups, each one with two general purpose hardware timers. All the timers are based on 64 bits
-   counters and 16 bit prescalers. The timer counters can be configured to count up or down and support automatic reload
-   and software reload. They can also generate alarms when they reach a specific value, defined by the software. The value
-   of the counter can be read by the software program.
-
-   Now even you use all these new 16 ISR-based timers,with their maximum interval practically unlimited (limited only by
-   unsigned long miliseconds), you just consume only one ESP32 timer and avoid conflicting with other cores' tasks.
-   The accuracy is nearly perfect compared to software timers. The most important feature is they're ISR-based timers
-   Therefore, their executions are not blocked by bad-behaving functions / tasks.
-   This important feature is absolutely necessary for mission-critical tasks.
-
-   Based on SimpleTimer - A timer library for Arduino.
-   Author: mromani@ottotecnica.com
-   Copyright (c) 2010 OTTOTECNICA Italy
-
-   Based on BlynkTimer.h
-   Author: Volodymyr Shymanskyy
-
-   Version Modified By   Date      Comments
-   ------- -----------  ---------- -----------
-    1.0.0   K Hoang      23/11/2019 Initial coding
-    1.0.1   K Hoang      27/11/2019 No v1.0.1. Bump up to 1.0.2 to match ESP8266_ISR_TimerInterupt library
-    1.0.2   K.Hoang      03/12/2019 Permit up to 16 super-long-time, super-accurate ISR-based timers to avoid being blocked
-    1.0.3   K.Hoang      17/05/2020 Restructure code. Add examples. Enhance README.
+  ISR_Switch.ino
+  For ESP32 boards
+  Written by Khoi Hoang
+  
+  Built by Khoi Hoang https://github.com/khoih-prog/ESP32TimerInterrupt
+  Licensed under MIT license
+  
+  The ESP32 has two timer groups, each one with two general purpose hardware timers. All the timers are based on 64 bits
+  counters and 16 bit prescalers. The timer counters can be configured to count up or down and support automatic reload
+  and software reload. They can also generate alarms when they reach a specific value, defined by the software. The value
+  of the counter can be read by the software program.
+  
+  Now even you use all these new 16 ISR-based timers,with their maximum interval practically unlimited (limited only by
+  unsigned long miliseconds), you just consume only one ESP32 timer and avoid conflicting with other cores' tasks.
+  The accuracy is nearly perfect compared to software timers. The most important feature is they're ISR-based timers
+  Therefore, their executions are not blocked by bad-behaving functions / tasks.
+  This important feature is absolutely necessary for mission-critical tasks.
+  
+  Based on SimpleTimer - A timer library for Arduino.
+  Author: mromani@ottotecnica.com
+  Copyright (c) 2010 OTTOTECNICA Italy
+  
+  Based on BlynkTimer.h
+  Author: Volodymyr Shymanskyy
+  
+  Version: 1.4.0
+  
+  Version Modified By   Date      Comments
+  ------- -----------  ---------- -----------
+  1.0.0   K Hoang      23/11/2019 Initial coding
+  1.0.1   K Hoang      27/11/2019 No v1.0.1. Bump up to 1.0.2 to match ESP8266_ISR_TimerInterupt library
+  1.0.2   K.Hoang      03/12/2019 Permit up to 16 super-long-time, super-accurate ISR-based timers to avoid being blocked
+  1.0.3   K.Hoang      17/05/2020 Restructure code. Add examples. Enhance README.
+  1.1.0   K.Hoang      27/10/2020 Restore cpp code besides Impl.h code to use if Multiple-Definition linker error.
+  1.1.1   K.Hoang      06/12/2020 Add Version String and Change_Interval example to show how to change TimerInterval
+  1.2.0   K.Hoang      08/01/2021 Add better debug feature. Optimize code and examples to reduce RAM usage
+  1.3.0   K.Hoang      06/05/2021 Add support to ESP32-S2
+  1.4.0   K.Hoang      01/06/2021 Add complex examples. Fix compiler errors due to conflict to some libraries.
 *****************************************************************************************************************************/
 /* Notes:
    Special design is necessary to share data between interrupt code and the rest of your program.
@@ -54,54 +60,47 @@
 */
 
 #ifndef ESP32
-#error This code is designed to run on ESP32 platform, not Arduino nor ESP8266! Please check your Tools->Board setting.
+  #error This code is designed to run on ESP32 platform, not Arduino nor ESP8266! Please check your Tools->Board setting.
+#elif ( ARDUINO_ESP32S2_DEV || ARDUINO_FEATHERS2 || ARDUINO_ESP32S2_THING_PLUS || ARDUINO_MICROS2 || \
+        ARDUINO_METRO_ESP32S2 || ARDUINO_MAGTAG29_ESP32S2 || ARDUINO_FUNHOUSE_ESP32S2 || \
+        ARDUINO_ADAFRUIT_FEATHER_ESP32S2_NOPSRAM )
+  #define USING_ESP32_S2_TIMER_INTERRUPT            true
 #endif
-
-//These define's must be placed at the beginning before #include "ESP32TimerInterrupt.h"
-#define TIMER_INTERRUPT_DEBUG      1
 
 #define BLYNK_PRINT Serial
 //#define BLYNK_DEBUG true
 
-#include <WiFi.h>
+// These define's must be placed at the beginning before #include "TimerInterrupt_Generic.h"
+// _TIMERINTERRUPT_LOGLEVEL_ from 0 to 4
+// Don't define _TIMERINTERRUPT_LOGLEVEL_ > 0. Only for special ISR debugging only. Can hang the system.
+#define TIMER_INTERRUPT_DEBUG         0
+#define _TIMERINTERRUPT_LOGLEVEL_     0
 
-//#define USE_BLYNK_WM   true
-#define USE_BLYNK_WM   false
+#include <WiFi.h>
 
 #define USE_SSL     false
 
-#if USE_BLYNK_WM
 #if USE_SSL
-#include <BlynkSimpleEsp32_SSL_WM.h>        //https://github.com/khoih-prog/Blynk_WM
+  #include <BlynkSimpleEsp32_SSL.h>
+  #define BLYNK_HARDWARE_PORT     9443
 #else
-#include <BlynkSimpleEsp32_WM.h>            //https://github.com/khoih-prog/Blynk_WM
-#endif
-#else
-#if USE_SSL
-#include <BlynkSimpleEsp32_SSL.h>
-#define BLYNK_HARDWARE_PORT     9443
-#else
-#include <BlynkSimpleEsp32.h>
-#define BLYNK_HARDWARE_PORT     8080
-#endif
+  #include <BlynkSimpleEsp32.h>
+  #define BLYNK_HARDWARE_PORT     8080
 #endif
 
-#if !USE_BLYNK_WM
 #define USE_LOCAL_SERVER    true
 
 // If local server
 #if USE_LOCAL_SERVER
-char blynk_server[]   = "yourname.duckdns.org";
-//char blynk_server[]   = "192.168.2.110";
+  char blynk_server[]   = "account.duckdns.org";
+  //char blynk_server[]   = "192.168.2.110";
 #else
-char blynk_server[]   = "";
+  char blynk_server[]   = "";
 #endif
 
-char auth[]     = "***";
-char ssid[]     = "***";
-char pass[]     = "***";
-
-#endif
+char auth[]     = "****";
+char ssid[]     = "****";
+char pass[]     = "****";
 
 #define DEBOUNCE_TIME               25
 #define LONG_BUTTON_PRESS_TIME_MS   100
@@ -124,8 +123,8 @@ volatile bool LampState    = false;
 volatile bool SwitchReset  = true;
 
  
-#define RELAY_PIN     32            // Pin D32 mapped to pin GPIO32/ADC4/TOUCH9 of ESP32
-#define BUTTON_PIN    33            // Pin D33 mapped to pin GPIO33/ADC5/TOUCH8 of ESP32
+#define RELAY_PIN     2         // Pin D2 mapped to pin GPIO2/LED_BUILTIN of ESP32/ESP32-S2
+#define BUTTON_PIN    1         // Pin D1 mapped to pin GPIO1 of ESP32/ESP32-S2
 
 BlynkTimer Timer;
 
@@ -182,11 +181,19 @@ void IRAM_ATTR Falling()
   }
 }
 
-void heartBeatPrint(void)
+void heartBeatPrint()
 {
   static int num = 1;
 
-  Serial.print("B");
+  if (Blynk.connected())
+  {
+    Serial.print(F("B"));
+  }
+  else
+  {
+    Serial.print(F("F"));
+  }
+  
   if (num == 80)
   {
     Serial.println();
@@ -194,7 +201,7 @@ void heartBeatPrint(void)
   }
   else if (num++ % 10 == 0)
   {
-    Serial.print(" ");
+    Serial.print(F(" "));
   }
 }
 
@@ -253,15 +260,13 @@ void setup()
   Serial.begin(115200);
   while (!Serial);
 
-  Serial.println("\nStarting ISR_Switch");
+  Serial.print(F("\nStarting ISR_Switch on ")); Serial.println(ARDUINO_BOARD);
+  Serial.print(F("CPU Frequency = ")); Serial.print(F_CPU / 1000000); Serial.println(F(" MHz"));
 
   LampState = false;
 
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), Falling, FALLING);
 
-#if USE_BLYNK_WM
-  Blynk.begin();
-#else
   unsigned long startWiFi = millis();
 
   WiFi.begin(ssid, pass);
@@ -277,10 +282,9 @@ void setup()
   Blynk.connect();
 
   if (Blynk.connected())
-    Serial.println("Blynk connected");
+    Serial.println(F("Blynk connected"));
   else
-    Serial.println("Blynk not connected yet");
-#endif
+    Serial.println(F("Blynk not connected yet"));
 
   Timer.setInterval(buttonInterval, checkButton);
 }

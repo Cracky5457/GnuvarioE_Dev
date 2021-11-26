@@ -7,7 +7,9 @@
 #include <sdcardHAL.h>
 #endif
 
+#include <RingBuf.h>
 #include <sqlite3.h>
+#include <igcdata.h>
 
 class VarioSqlFlight
 {
@@ -28,16 +30,20 @@ private:
 public:
     VarioSqlFlight();
     ~VarioSqlFlight();
-    bool insertFlight(String data);
-    bool updateFlight(uint8_t id, String data);
+    bool insertFlight(igcdata myIgcData);
+    bool updateFlight(uint8_t id, igcdata myIgcData);
     bool delFlight(uint8_t id);
     bool updateFlightMap(uint8_t id, String data);
     String getSites();
     bool insertSite(String data);
     bool updateSite(uint8_t id, String data);
     bool deleteSite(uint8_t id);
-    bool initGetFlightsQuery(uint8_t limit, uint8_t offset);
-    String getNextFlight();
+    bool initGetFlightsQuery(uint16_t limit, uint16_t offset);
+    bool initGetFlightsQuery(String parcel);
+    //String getNextFlight();
+    bool getNextFlight(bool &firstline, RingBuf<char, 1024> &buffer);
     void executeMigration(String version, String sql);
+    String escapeJson(const String &s);
+    String getFlightsShort(String mode, String parcel);
 };
 #endif

@@ -16,6 +16,8 @@
 #include <sdcardHAL.h>
 #endif
 
+#include "VarioSettings.h"
+
 #include "VarioSqlFlight.h"
 #include <ArduinoJson.h>
 
@@ -23,7 +25,7 @@ VarioSqlFlight::VarioSqlFlight()
 {
 
 #ifdef SQL_DEBUG
-    SerialPort.println("VarioSqlFlight");
+    SerialPort.println("VarioSqlFlight constructeur");
 #endif //SQL_DEBUG
 
     dbPath = "/sd/db/vol.db";
@@ -41,6 +43,7 @@ VarioSqlFlight::VarioSqlFlight()
 VarioSqlFlight::~VarioSqlFlight()
 {
     closeDb();
+    sqlite3_shutdown();
 }
 
 int VarioSqlFlight::callback(void *data, int argc, char **argv, char **azColName)
@@ -77,11 +80,14 @@ int VarioSqlFlight::openDb(const char *filename, sqlite3 **db)
 
 void VarioSqlFlight::closeDb()
 {
+    if (isOpened)
+    {
 #ifdef SQL_DEBUG
-    Serial.printf("close db");
+        Serial.printf("close db");
 #endif //SQL_DEBUG
-    sqlite3_close(myDb);
-    isOpened = false;
+        sqlite3_close(myDb);
+        isOpened = false;
+    }
 }
 
 int VarioSqlFlight::db_exec(sqlite3 *db, const char *sql)
@@ -111,23 +117,21 @@ int VarioSqlFlight::db_exec(sqlite3 *db, const char *sql)
     return rc;
 }
 
-bool VarioSqlFlight::insertFlight(String data)
+bool VarioSqlFlight::insertFlight(igcdata myIgcData)
 {
-#ifdef SQL_DEBUG
-    SerialPort.println(data);
-#endif //SQL_DEBUG
+#ifdef MEMORY_DEBUG
+    Serial.println("Free heap debut insertFlight");
+    Serial.println(ESP.getFreeHeap());
+#endif //MEMORY_DEBUG
 
-    DynamicJsonDocument doc(4096);
-    DeserializationError err = deserializeJson(doc, data);
-    if (err)
-    {
-#ifdef SQL_DEBUG
-        Serial.print(F("deserializeJson() failed with code "));
-        Serial.println(err.c_str());
-#endif //SQL_DEBUG
+    // #ifdef SQL_DEBUG
+    //     SerialPort.println(data);
+    // #endif //SQL_DEBUG
 
-        return false;
-    }
+#ifdef MEMORY_DEBUG
+    Serial.println("Free heap insertFlight fin deserialization");
+    Serial.println(ESP.getFreeHeap());
+#endif //MEMORY_DEBUG
 
     int rc;
     sqlite3_stmt *res;
@@ -144,9 +148,15 @@ bool VarioSqlFlight::insertFlight(String data)
             return false;
         }
     }
+
+#ifdef MEMORY_DEBUG
+    Serial.println("Free heap insertFlight fin opendb");
+    Serial.println(ESP.getFreeHeap());
+#endif //MEMORY_DEBUG
+
     String sql;
 
-    if (doc.containsKey("filename") && doc.containsKey("md5"))
+    if (myIgcData.filename != "" && myIgcData.md5 != "")
     {
         sql = "DELETE FROM flight WHERE filename = ? AND md5 = ?";
 
@@ -164,8 +174,8 @@ bool VarioSqlFlight::insertFlight(String data)
         SerialPort.println("Début binding");
 #endif //SQL_DEBUG
 
-        sqlite3_bind_text(res, 1, doc["filename"], strlen(doc["filename"]), SQLITE_STATIC);
-        sqlite3_bind_text(res, 2, doc["md5"], strlen(doc["md5"]), SQLITE_STATIC);
+        sqlite3_bind_text(res, 1, (char *)myIgcData.filename.c_str(), myIgcData.filename.length(), SQLITE_STATIC);
+        sqlite3_bind_text(res, 2, (char *)myIgcData.md5.c_str(), myIgcData.md5.length(), SQLITE_STATIC);
 
         if (sqlite3_step(res) != SQLITE_DONE)
         {
@@ -182,13 +192,26 @@ bool VarioSqlFlight::insertFlight(String data)
             return false;
         }
 
-        sqlite3_finalize(res);
+        rc = sqlite3_finalize(res);
+        if (rc != SQLITE_OK)
+        {
+#ifdef SQL_DEBUG
+            SerialPort.println("cannot finalize");
+#endif //SQL_DEBUG
+            closeDb();
+            return false;
+        }
     }
+
+#ifdef MEMORY_DEBUG
+    Serial.println("Free heap fin delete  insertFlight");
+    Serial.println(ESP.getFreeHeap());
+#endif //MEMORY_DEBUG
 
     sql = "INSERT INTO flight (";
     sql = sql + "pilot, wing, flight_date, start_flight_time, end_flight_time, start_height, end_height, min_height, max_height, start_lat, start_lon, end_lat, end_lon";
 
-    if (doc.containsKey("filename") && doc.containsKey("md5"))
+    if (myIgcData.filename != "" && myIgcData.md5 != "")
     {
         sql = sql + ", filename, md5";
     }
@@ -213,28 +236,28 @@ bool VarioSqlFlight::insertFlight(String data)
     SerialPort.println("Début binding");
 #endif //SQL_DEBUG
 
-    sqlite3_bind_text(res, 1, doc["pilot"], strlen(doc["pilot"]), SQLITE_STATIC);
-    sqlite3_bind_text(res, 2, doc["wing"], strlen(doc["wing"]), SQLITE_STATIC);
-    sqlite3_bind_text(res, 3, doc["flightDate"], strlen(doc["flightDate"]), SQLITE_STATIC);
-    sqlite3_bind_text(res, 4, doc["startFlightTime"], strlen(doc["startFlightTime"]), SQLITE_STATIC);
-    sqlite3_bind_text(res, 5, doc["endFlightTime"], strlen(doc["endFlightTime"]), SQLITE_STATIC);
-    sqlite3_bind_int(res, 6, doc["startHeight"]);
-    sqlite3_bind_int(res, 7, doc["endHeight"]);
-    sqlite3_bind_int(res, 8, doc["minHeight"]);
-    sqlite3_bind_int(res, 9, doc["maxHeight"]);
-    sqlite3_bind_double(res, 10, doc["startLat"]);
-    sqlite3_bind_double(res, 11, doc["startLon"]);
-    sqlite3_bind_double(res, 12, doc["endLat"]);
-    sqlite3_bind_double(res, 13, doc["endLon"]);
-    if (doc.containsKey("filename") && doc.containsKey("md5"))
+    sqlite3_bind_text(res, 1, (char *)myIgcData.pilot.c_str(), myIgcData.pilot.length(), SQLITE_STATIC);
+    sqlite3_bind_text(res, 2, (char *)myIgcData.wing.c_str(), myIgcData.wing.length(), SQLITE_STATIC);
+    sqlite3_bind_text(res, 3, (char *)myIgcData.flightDate.c_str(), myIgcData.flightDate.length(), SQLITE_STATIC);
+    sqlite3_bind_text(res, 4, (char *)myIgcData.startFlightTime.c_str(), myIgcData.startFlightTime.length(), SQLITE_STATIC);
+    sqlite3_bind_text(res, 5, (char *)myIgcData.endFlightTime.c_str(), myIgcData.endFlightTime.length(), SQLITE_STATIC);
+    sqlite3_bind_int(res, 6, myIgcData.startHeight);
+    sqlite3_bind_int(res, 7, myIgcData.endHeight);
+    sqlite3_bind_int(res, 8, myIgcData.minHeight);
+    sqlite3_bind_int(res, 9, myIgcData.maxHeight);
+    sqlite3_bind_double(res, 10, myIgcData.startLat);
+    sqlite3_bind_double(res, 11, myIgcData.startLon);
+    sqlite3_bind_double(res, 12, myIgcData.endLat);
+    sqlite3_bind_double(res, 13, myIgcData.endLon);
+    if (myIgcData.filename != "" && myIgcData.md5 != "")
     {
-        sqlite3_bind_text(res, 14, doc["filename"], strlen(doc["filename"]), SQLITE_STATIC);
-        sqlite3_bind_text(res, 15, doc["md5"], strlen(doc["md5"]), SQLITE_STATIC);
+        sqlite3_bind_text(res, 14, (char *)myIgcData.filename.c_str(), myIgcData.filename.length(), SQLITE_STATIC);
+        sqlite3_bind_text(res, 15, (char *)myIgcData.md5.c_str(), myIgcData.md5.length(), SQLITE_STATIC);
     }
     else
     {
-        sqlite3_bind_int(res, 14, doc["site_id"]);
-        sqlite3_bind_text(res, 15, doc["comment"], strlen(doc["comment"]), SQLITE_STATIC);
+        sqlite3_bind_int(res, 14, myIgcData.site_id);
+        sqlite3_bind_text(res, 15, (char *)myIgcData.comment.c_str(), myIgcData.comment.length(), SQLITE_STATIC);
     }
 
 #ifdef SQL_DEBUG
@@ -292,7 +315,7 @@ bool VarioSqlFlight::delFlight(uint8_t id)
         }
     }
 
-    String sql = "DELETE FROM flight WHERE id = ?";
+    String sql = F("DELETE FROM flight WHERE id = ?");
 
     rc = sqlite3_prepare_v2(myDb, (char *)sql.c_str(), sql.length(), &res, &tail);
     if (rc != SQLITE_OK)
@@ -344,23 +367,12 @@ bool VarioSqlFlight::delFlight(uint8_t id)
     return true;
 }
 
-bool VarioSqlFlight::updateFlight(uint8_t id, String data)
+bool VarioSqlFlight::updateFlight(uint8_t id, igcdata myIgcData)
 {
 #ifdef SQL_DEBUG
+    SerialPort.println("updateFlight");
     SerialPort.println(data);
 #endif //SQL_DEBUG
-
-    DynamicJsonDocument doc(4096);
-    DeserializationError err = deserializeJson(doc, data);
-    if (err)
-    {
-#ifdef SQL_DEBUG
-        Serial.print(F("deserializeJson() failed with code "));
-        Serial.println(err.c_str());
-#endif //SQL_DEBUG
-
-        return false;
-    }
 
     int rc;
     sqlite3_stmt *res;
@@ -378,9 +390,9 @@ bool VarioSqlFlight::updateFlight(uint8_t id, String data)
         }
     }
 
-    String sql = "UPDATE flight SET site_id = ?, comment = ? ";
+    String sql = F("UPDATE flight SET site_id = ?, comment = ? ");
 
-    if (doc.containsKey("pilot"))
+    if (myIgcData.pilot != "")
     {
         sql = sql + ", pilot = ?, wing = ?, flight_date = ?, start_flight_time = ?, end_flight_time = ?, start_height = ?, end_height = ?, min_height = ?, max_height = ?, start_lat = ?, start_lon = ?, end_lat = ?, end_lon = ? ";
     }
@@ -401,24 +413,24 @@ bool VarioSqlFlight::updateFlight(uint8_t id, String data)
     SerialPort.println("Début binding");
 #endif //SQL_DEBUG
 
-    sqlite3_bind_int(res, 1, doc["site_id"]);
-    sqlite3_bind_text(res, 2, doc["comment"], strlen(doc["comment"]), SQLITE_STATIC);
+    sqlite3_bind_int(res, 1, myIgcData.site_id);
+    sqlite3_bind_text(res, 2, (char *)myIgcData.comment.c_str(), myIgcData.comment.length(), SQLITE_STATIC);
 
-    if (doc.containsKey("pilot"))
+    if (myIgcData.pilot != "")
     {
-        sqlite3_bind_text(res, 3, doc["pilot"], strlen(doc["pilot"]), SQLITE_STATIC);
-        sqlite3_bind_text(res, 4, doc["wing"], strlen(doc["wing"]), SQLITE_STATIC);
-        sqlite3_bind_text(res, 5, doc["flightDate"], strlen(doc["flightDate"]), SQLITE_STATIC);
-        sqlite3_bind_text(res, 6, doc["startFlightTime"], strlen(doc["startFlightTime"]), SQLITE_STATIC);
-        sqlite3_bind_text(res, 7, doc["endFlightTime"], strlen(doc["endFlightTime"]), SQLITE_STATIC);
-        sqlite3_bind_int(res, 8, doc["startHeight"]);
-        sqlite3_bind_int(res, 9, doc["endHeight"]);
-        sqlite3_bind_int(res, 10, doc["minHeight"]);
-        sqlite3_bind_int(res, 11, doc["maxHeight"]);
-        sqlite3_bind_double(res, 12, doc["startLat"]);
-        sqlite3_bind_double(res, 13, doc["startLon"]);
-        sqlite3_bind_double(res, 14, doc["endLat"]);
-        sqlite3_bind_double(res, 15, doc["endLon"]);
+        sqlite3_bind_text(res, 3, (char *)myIgcData.pilot.c_str(), myIgcData.pilot.length(), SQLITE_STATIC);
+        sqlite3_bind_text(res, 4, (char *)myIgcData.wing.c_str(), myIgcData.wing.length(), SQLITE_STATIC);
+        sqlite3_bind_text(res, 5, (char *)myIgcData.flightDate.c_str(), myIgcData.flightDate.length(), SQLITE_STATIC);
+        sqlite3_bind_text(res, 6, (char *)myIgcData.startFlightTime.c_str(), myIgcData.startFlightTime.length(), SQLITE_STATIC);
+        sqlite3_bind_text(res, 7, (char *)myIgcData.endFlightTime.c_str(), myIgcData.endFlightTime.length(), SQLITE_STATIC);
+        sqlite3_bind_int(res, 8, myIgcData.startHeight);
+        sqlite3_bind_int(res, 9, myIgcData.endHeight);
+        sqlite3_bind_int(res, 10, myIgcData.minHeight);
+        sqlite3_bind_int(res, 11, myIgcData.maxHeight);
+        sqlite3_bind_double(res, 12, myIgcData.startLat);
+        sqlite3_bind_double(res, 13, myIgcData.startLon);
+        sqlite3_bind_double(res, 14, myIgcData.endLat);
+        sqlite3_bind_double(res, 15, myIgcData.endLon);
         sqlite3_bind_int(res, 16, id);
     }
     else
@@ -478,7 +490,7 @@ bool VarioSqlFlight::updateFlightMap(uint8_t id, String data)
         }
     }
 
-    String sql = "UPDATE flight SET minimap = ? WHERE id = ?";
+    String sql = F("UPDATE flight SET minimap = ? WHERE id = ?");
 
     rc = sqlite3_prepare_v2(myDb, (char *)sql.c_str(), sql.length(), &res, &tail);
     if (rc != SQLITE_OK)
@@ -552,7 +564,7 @@ String VarioSqlFlight::getSites()
         }
     }
 
-    String sql = "SELECT id, lib, comment, lat, lon FROM site";
+    String sql = F("SELECT id, lib, comment, lat, lon FROM site");
 
     rc = sqlite3_prepare_v2(myDb, sql.c_str(), 1000, &res, &tail);
     if (rc != SQLITE_OK)
@@ -588,8 +600,9 @@ bool VarioSqlFlight::insertSite(String data)
     SerialPort.println(data);
 #endif //SQL_DEBUG
 
-    DynamicJsonDocument doc(4096);
-    DeserializationError err = deserializeJson(doc, data);
+    GnuSettings.doc.clear();
+    //    DynamicJsonDocument doc(4096);
+    DeserializationError err = deserializeJson(GnuSettings.doc, data);
     if (err)
     {
 #ifdef SQL_DEBUG
@@ -616,7 +629,7 @@ bool VarioSqlFlight::insertSite(String data)
         }
     }
 
-    String sql = "INSERT INTO site (lib, comment, lat, lon) VALUES (?, ?, ? ,?)";
+    String sql = F("INSERT INTO site (lib, comment, lat, lon) VALUES (?, ?, ? ,?)");
 
     rc = sqlite3_prepare_v2(myDb, (char *)sql.c_str(), sql.length(), &res, &tail);
     if (rc != SQLITE_OK)
@@ -632,10 +645,10 @@ bool VarioSqlFlight::insertSite(String data)
     SerialPort.println("Début binding");
 #endif //SQL_DEBUG
 
-    sqlite3_bind_text(res, 1, doc["lib"], strlen(doc["lib"]), SQLITE_STATIC);
-    sqlite3_bind_text(res, 2, doc["comment"], strlen(doc["comment"]), SQLITE_STATIC);
-    sqlite3_bind_double(res, 3, doc["lat"]);
-    sqlite3_bind_double(res, 4, doc["lon"]);
+    sqlite3_bind_text(res, 1, GnuSettings.doc["lib"], strlen(GnuSettings.doc["lib"]), SQLITE_STATIC);
+    sqlite3_bind_text(res, 2, GnuSettings.doc["comment"], strlen(GnuSettings.doc["comment"]), SQLITE_STATIC);
+    sqlite3_bind_double(res, 3, GnuSettings.doc["lat"]);
+    sqlite3_bind_double(res, 4, GnuSettings.doc["lon"]);
 
 #ifdef SQL_DEBUG
     Serial.printf("Début step");
@@ -677,8 +690,10 @@ bool VarioSqlFlight::updateSite(uint8_t id, String data)
     SerialPort.println(data);
 #endif //SQL_DEBUG
 
-    DynamicJsonDocument doc(4096);
-    DeserializationError err = deserializeJson(doc, data);
+    GnuSettings.doc.clear();
+
+    //    DynamicJsonDocument doc(4096);
+    DeserializationError err = deserializeJson(GnuSettings.doc, data);
     if (err)
     {
 #ifdef SQL_DEBUG
@@ -705,7 +720,7 @@ bool VarioSqlFlight::updateSite(uint8_t id, String data)
         }
     }
 
-    String sql = "UPDATE site SET lib = ?, comment = ?, lat = ?, lon = ? WHERE id = ?";
+    String sql = F("UPDATE site SET lib = ?, comment = ?, lat = ?, lon = ? WHERE id = ?");
 
     rc = sqlite3_prepare_v2(myDb, (char *)sql.c_str(), sql.length(), &res, &tail);
     if (rc != SQLITE_OK)
@@ -721,10 +736,10 @@ bool VarioSqlFlight::updateSite(uint8_t id, String data)
     SerialPort.println("Début binding");
 #endif //SQL_DEBUG
 
-    sqlite3_bind_text(res, 1, doc["lib"], strlen(doc["lib"]), SQLITE_STATIC);
-    sqlite3_bind_text(res, 2, doc["comment"], strlen(doc["comment"]), SQLITE_STATIC);
-    sqlite3_bind_double(res, 3, doc["lat"]);
-    sqlite3_bind_double(res, 4, doc["lon"]);
+    sqlite3_bind_text(res, 1, GnuSettings.doc["lib"], strlen(GnuSettings.doc["lib"]), SQLITE_STATIC);
+    sqlite3_bind_text(res, 2, GnuSettings.doc["comment"], strlen(GnuSettings.doc["comment"]), SQLITE_STATIC);
+    sqlite3_bind_double(res, 3, GnuSettings.doc["lat"]);
+    sqlite3_bind_double(res, 4, GnuSettings.doc["lon"]);
     sqlite3_bind_int(res, 5, id);
 
 #ifdef SQL_DEBUG
@@ -783,7 +798,7 @@ bool VarioSqlFlight::deleteSite(uint8_t id)
         }
     }
 
-    String sql = "DELETE FROM site WHERE id = ?";
+    String sql = F("DELETE FROM site WHERE id = ?");
 
     rc = sqlite3_prepare_v2(myDb, (char *)sql.c_str(), sql.length(), &res, &tail);
     if (rc != SQLITE_OK)
@@ -835,51 +850,156 @@ bool VarioSqlFlight::deleteSite(uint8_t id)
     return true;
 }
 
-bool VarioSqlFlight::initGetFlightsQuery(uint8_t limit, uint8_t offset)
+bool VarioSqlFlight::initGetFlightsQuery(uint16_t limit, uint16_t offset)
 {
+#ifdef MEMORY_DEBUG
+    Serial.println("Free heap initGetFlightsQuery");
     Serial.println(ESP.getFreeHeap());
+#endif //MEMORY_DEBUG
+
     haveNextFlight = false;
 
     int rc;
     // sqlite3_stmt *res;
     const char *tail;
 
-#ifdef SQL_DEBUG
-    SerialPort.println("openDb");
-#endif //SQL_DEBUG
-
     if (!isOpened)
     {
+#ifdef SQL_DEBUG
+        SerialPort.println("openDb");
+#endif //SQL_DEBUG
         if (openDb((char *)dbPath.c_str(), &myDb))
         {
             return false;
         }
     }
 
-    String sql = "SELECT f.id, f.site_id, f.filename, f.md5, f.pilot, f.wing, f.flight_date, f.start_flight_time, f.end_flight_time, f.start_height, f.end_height, f.min_height, f.max_height, f.start_lat, f.start_lon, f.end_lat, f.end_lon, f.comment, f.minimap, s.lib FROM flight f LEFT JOIN site s ON(s.id = f.site_id) ORDER BY f.flight_date DESC, f.start_flight_time ASC LIMIT " + String(limit) + " OFFSET " + String(offset);
+#ifdef MEMORY_DEBUG
+    Serial.println("Free heap initGetFlightsQuery after opendb");
+    Serial.println(ESP.getFreeHeap());
+#endif //MEMORY_DEBUG
+
+    //String sql = F("SELECT f.id, f.site_id, f.filename, f.md5, f.pilot, f.wing, f.flight_date, f.start_flight_time, f.end_flight_time, f.start_height, f.end_height, f.min_height, f.max_height, f.start_lat, f.start_lon, f.end_lat, f.end_lon, f.comment, f.minimap, s.lib FROM flight f LEFT JOIN site s ON(s.id = f.site_id) ORDER BY f.flight_date DESC, f.start_flight_time ASC LIMIT ?  OFFSET ?");
+    //String sql = F("SELECT f.id, f.site_id, f.filename, f.md5, f.pilot, f.wing, f.flight_date, f.start_flight_time, f.end_flight_time, f.start_height, f.end_height, f.min_height, f.max_height, f.start_lat, f.start_lon, f.end_lat, f.end_lon, f.comment, f.minimap, 'toto' AS lib FROM flight f");
+    String sql = "SELECT f.id, f.site_id, f.filename, f.pilot, f.wing, f.flight_date, f.start_flight_time, f.end_flight_time, f.start_height, f.end_height, f.min_height, f.max_height, f.start_lat, f.start_lon, f.end_lat, f.end_lon, f.comment, s.lib FROM flight f LEFT JOIN site s ON(s.id = f.site_id) LIMIT ?  OFFSET ?";
 
 #ifdef SQL_DEBUG
-    SerialPort.println(sql);
+    // SerialPort.println(sql);
 #endif //SQL_DEBUG
 
     rc = sqlite3_prepare_v2(myDb, sql.c_str(), sql.length(), &nextFlightRes, &tail);
+
     if (rc != SQLITE_OK)
     {
+#ifdef SQL_DEBUG
+        Serial.printf("ERROR preparing sql: %s\n", sqlite3_errmsg(myDb));
+#endif //SQL_DEBUG
         closeDb();
         return false;
     }
 
+    sqlite3_bind_int(nextFlightRes, 1, limit);
+    sqlite3_bind_int(nextFlightRes, 2, offset);
+
     haveNextFlight = true;
+
+#ifdef MEMORY_DEBUG
+    Serial.println("Free heap FIN initGetFlightsQuery");
+    Serial.println(ESP.getFreeHeap());
+#endif //MEMORY_DEBUG
 
     return true;
 }
 
-String VarioSqlFlight::getNextFlight()
+bool VarioSqlFlight::initGetFlightsQuery(String parcel)
 {
-    DynamicJsonDocument doc(4196);
+#ifdef MEMORY_DEBUG
+    Serial.println("Free heap initGetFlightsQuery");
+    Serial.println(ESP.getFreeHeap());
+#endif //MEMORY_DEBUG
 
-    // create an object
-    JsonObject obj1 = doc.to<JsonObject>();
+    haveNextFlight = false;
+
+    int rc;
+    // sqlite3_stmt *res;
+    const char *tail;
+
+    if (!isOpened)
+    {
+#ifdef SQL_DEBUG
+        SerialPort.println("openDb");
+#endif //SQL_DEBUG
+        if (openDb((char *)dbPath.c_str(), &myDb))
+        {
+            return false;
+        }
+    }
+
+#ifdef MEMORY_DEBUG
+    Serial.println("Free heap initGetFlightsQuery after opendb");
+    Serial.println(ESP.getFreeHeap());
+#endif //MEMORY_DEBUG
+
+#ifdef SQL_DEBUG
+    Serial.print("Parcel:");
+    Serial.println(parcel);
+#endif //SQL_DEBUG
+
+    //String sql = F("SELECT f.id, f.site_id, f.filename, f.md5, f.pilot, f.wing, f.flight_date, f.start_flight_time, f.end_flight_time, f.start_height, f.end_height, f.min_height, f.max_height, f.start_lat, f.start_lon, f.end_lat, f.end_lon, f.comment, f.minimap, s.lib FROM flight f LEFT JOIN site s ON(s.id = f.site_id) ORDER BY f.flight_date DESC, f.start_flight_time ASC LIMIT ?  OFFSET ?");
+    //String sql = F("SELECT f.id, f.site_id, f.filename, f.md5, f.pilot, f.wing, f.flight_date, f.start_flight_time, f.end_flight_time, f.start_height, f.end_height, f.min_height, f.max_height, f.start_lat, f.start_lon, f.end_lat, f.end_lon, f.comment, f.minimap, 'toto' AS lib FROM flight f");
+    String sql = "SELECT f.id, f.site_id, f.filename, f.pilot, f.wing, f.flight_date, f.start_flight_time, f.end_flight_time, f.start_height, f.end_height, f.min_height, f.max_height, f.start_lat, f.start_lon, f.end_lat, f.end_lon, f.comment, s.lib FROM flight f LEFT JOIN site s ON(s.id = f.site_id) WHERE strftime('%Y%m', f.flight_date) = ?";
+
+#ifdef SQL_DEBUG
+    // SerialPort.println(sql);
+#endif //SQL_DEBUG
+
+    rc = sqlite3_prepare_v2(myDb, sql.c_str(), sql.length(), &nextFlightRes, &tail);
+
+    if (rc != SQLITE_OK)
+    {
+#ifdef SQL_DEBUG
+        Serial.printf("ERROR preparing sql: %s\n", sqlite3_errmsg(myDb));
+#endif //SQL_DEBUG
+        closeDb();
+        return false;
+    }
+
+    // parcel = "202005";
+    rc = sqlite3_bind_text(nextFlightRes, 1, (char *)parcel.c_str(), parcel.length(), SQLITE_TRANSIENT);
+    if (rc != SQLITE_OK)
+    {
+#ifdef SQL_DEBUG
+        Serial.printf("ERROR binding sql: %s\n", sqlite3_errmsg(myDb));
+#endif //SQL_DEBUG
+        closeDb();
+        return false;
+    };
+
+    haveNextFlight = true;
+
+#ifdef MEMORY_DEBUG
+    Serial.println("Free heap FIN initGetFlightsQuery");
+    Serial.println(ESP.getFreeHeap());
+#endif //MEMORY_DEBUG
+
+    return true;
+}
+
+bool VarioSqlFlight::getNextFlight(bool &firstline, RingBuf<char, 1024> &buffer)
+{
+#ifdef SQL_DEBUG
+    SerialPort.println("getNextFlight");
+#endif //SQL_DEBUG
+
+#ifdef MEMORY_DEBUG
+    Serial.println("Free heap getNextFlight");
+    Serial.println(ESP.getFreeHeap());
+#endif //MEMORY_DEBUG
+
+    // DynamicJsonDocument doc(4096);
+
+    // // create an object
+    // JsonObject obj1 = doc.to<JsonObject>();
 
     int step_res;
 
@@ -889,36 +1009,138 @@ String VarioSqlFlight::getNextFlight()
 
         if (step_res == SQLITE_ROW)
         {
+            // //JsonObject obj1 = doc.createNestedObject();
+            // obj1["id"] = sqlite3_column_int(nextFlightRes, 0);
+            // obj1["site_id"] = sqlite3_column_int(nextFlightRes, 1);
+            // obj1["filename"] = String((char *)sqlite3_column_text(nextFlightRes, 2));
+            // obj1["md5"] = String((char *)sqlite3_column_text(nextFlightRes, 3));
+            // obj1["pilot"] = String((char *)sqlite3_column_text(nextFlightRes, 4));
+            // obj1["wing"] = String((char *)sqlite3_column_text(nextFlightRes, 5));
+            // obj1["flight_date"] = String((char *)sqlite3_column_text(nextFlightRes, 6));
+            // obj1["start_flight_time"] = String((char *)sqlite3_column_text(nextFlightRes, 7));
+            // obj1["end_flight_time"] = String((char *)sqlite3_column_text(nextFlightRes, 8));
+            // obj1["start_height"] = sqlite3_column_double(nextFlightRes, 9);
+            // obj1["end_height"] = sqlite3_column_double(nextFlightRes, 10);
+            // obj1["min_height"] = sqlite3_column_double(nextFlightRes, 11);
+            // obj1["max_height"] = sqlite3_column_double(nextFlightRes, 12);
+            // obj1["start_lat"] = sqlite3_column_double(nextFlightRes, 13);
+            // obj1["start_lon"] = sqlite3_column_double(nextFlightRes, 14);
+            // obj1["end_lat"] = sqlite3_column_double(nextFlightRes, 15);
+            // obj1["end_lon"] = sqlite3_column_double(nextFlightRes, 16);
+            // obj1["comment"] = String((char *)sqlite3_column_text(nextFlightRes, 17));
+            // obj1["minimap"] = String((char *)sqlite3_column_text(nextFlightRes, 18));
+            // obj1["site_lib"] = String((char *)sqlite3_column_text(nextFlightRes, 19));
 
-            //JsonObject obj1 = doc.createNestedObject();
-            obj1["id"] = sqlite3_column_int(nextFlightRes, 0);
-            obj1["site_id"] = sqlite3_column_int(nextFlightRes, 1);
-            obj1["filename"] = String((char *)sqlite3_column_text(nextFlightRes, 2));
-            obj1["md5"] = String((char *)sqlite3_column_text(nextFlightRes, 3));
-            obj1["pilot"] = String((char *)sqlite3_column_text(nextFlightRes, 4));
-            obj1["wing"] = String((char *)sqlite3_column_text(nextFlightRes, 5));
-            obj1["flight_date"] = String((char *)sqlite3_column_text(nextFlightRes, 6));
-            obj1["start_flight_time"] = String((char *)sqlite3_column_text(nextFlightRes, 7));
-            obj1["end_flight_time"] = String((char *)sqlite3_column_text(nextFlightRes, 8));
-            obj1["start_height"] = sqlite3_column_double(nextFlightRes, 9);
-            obj1["end_height"] = sqlite3_column_double(nextFlightRes, 10);
-            obj1["min_height"] = sqlite3_column_double(nextFlightRes, 11);
-            obj1["max_height"] = sqlite3_column_double(nextFlightRes, 12);
-            obj1["start_lat"] = sqlite3_column_double(nextFlightRes, 13);
-            obj1["start_lon"] = sqlite3_column_double(nextFlightRes, 14);
-            obj1["end_lat"] = sqlite3_column_double(nextFlightRes, 15);
-            obj1["end_lon"] = sqlite3_column_double(nextFlightRes, 16);
-            obj1["comment"] = String((char *)sqlite3_column_text(nextFlightRes, 17));
-            obj1["minimap"] = String((char *)sqlite3_column_text(nextFlightRes, 18));
-            obj1["site_lib"] = String((char *)sqlite3_column_text(nextFlightRes, 19));
+            char unvol[2048] = "";
 
-            String unvol;
-            serializeJson(obj1, unvol);
+            String tmp;
+            strcat(unvol, "{");
+
+            tmp = "\"id\" : " + escapeJson(String(sqlite3_column_int(nextFlightRes, 0)));
+            strcat(unvol, tmp.c_str());
+            strcat(unvol, ", ");
+
+            tmp = "\"site_id\" : " + escapeJson(String(sqlite3_column_int(nextFlightRes, 1)));
+            strcat(unvol, tmp.c_str());
+            strcat(unvol, ", ");
+
+            tmp = "\"filename\" : " + escapeJson(String((char *)sqlite3_column_text(nextFlightRes, 2)));
+            strcat(unvol, tmp.c_str());
+            strcat(unvol, ", ");
+
+            // tmp = "\"md5\" : " + escapeJson(String((char *)sqlite3_column_text(nextFlightRes, 3)));
+            // strcat(unvol, tmp.c_str());
+            // strcat(unvol, ", ");
+
+            tmp = "\"pilot\" : " + escapeJson(String((char *)sqlite3_column_text(nextFlightRes, 3)));
+            strcat(unvol, tmp.c_str());
+            strcat(unvol, ", ");
+
+            tmp = "\"wing\" : " + escapeJson(String((char *)sqlite3_column_text(nextFlightRes, 4)));
+            strcat(unvol, tmp.c_str());
+            strcat(unvol, ", ");
+
+            tmp = "\"flight_date\" : " + escapeJson(String((char *)sqlite3_column_text(nextFlightRes, 5)));
+            strcat(unvol, tmp.c_str());
+            strcat(unvol, ", ");
+
+            tmp = "\"start_flight_time\" : " + escapeJson(String((char *)sqlite3_column_text(nextFlightRes, 6)));
+            strcat(unvol, tmp.c_str());
+            strcat(unvol, ", ");
+
+            tmp = "\"end_flight_time\" : " + escapeJson(String((char *)sqlite3_column_text(nextFlightRes, 7)));
+            strcat(unvol, tmp.c_str());
+            strcat(unvol, ", ");
+
+            tmp = "\"start_height\" : " + escapeJson(String(sqlite3_column_int(nextFlightRes, 8)));
+            strcat(unvol, tmp.c_str());
+            strcat(unvol, ", ");
+
+            tmp = "\"end_height\" : " + escapeJson(String(sqlite3_column_int(nextFlightRes, 9)));
+            strcat(unvol, tmp.c_str());
+            strcat(unvol, ", ");
+
+            tmp = "\"min_height\" : " + escapeJson(String(sqlite3_column_int(nextFlightRes, 10)));
+            strcat(unvol, tmp.c_str());
+            strcat(unvol, ", ");
+
+            tmp = "\"max_height\" : " + escapeJson(String(sqlite3_column_int(nextFlightRes, 11)));
+            strcat(unvol, tmp.c_str());
+            strcat(unvol, ", ");
+
+            tmp = "\"start_lat\" : " + escapeJson(String(sqlite3_column_int(nextFlightRes, 12)));
+            strcat(unvol, tmp.c_str());
+            strcat(unvol, ", ");
+
+            tmp = "\"start_lon\" : " + escapeJson(String(sqlite3_column_int(nextFlightRes, 13)));
+            strcat(unvol, tmp.c_str());
+            strcat(unvol, ", ");
+
+            tmp = "\"end_lat\" : " + escapeJson(String(sqlite3_column_int(nextFlightRes, 14)));
+            strcat(unvol, tmp.c_str());
+            strcat(unvol, ", ");
+
+            tmp = "\"end_lon\" : " + escapeJson(String(sqlite3_column_int(nextFlightRes, 15)));
+            strcat(unvol, tmp.c_str());
+            strcat(unvol, ", ");
+
+            tmp = "\"comment\" : " + escapeJson(String((char *)sqlite3_column_text(nextFlightRes, 16)));
+            strcat(unvol, tmp.c_str());
+            strcat(unvol, ", ");
+
+            // tmp = "\"minimap\" : " + escapeJson(String((char *)sqlite3_column_text(nextFlightRes, 18)));
+            // strcat(unvol, tmp.c_str());
+            // strcat(unvol, ", ");
+
+            tmp = "\"site_lib\" : " + escapeJson(String((char *)sqlite3_column_text(nextFlightRes, 17)));
+            strcat(unvol, tmp.c_str());
+            strcat(unvol, "}");
+
+            // serializeJson(obj1, unvol);
 
 #ifdef SQL_DEBUG
+            Serial.print("unvol : ");
             Serial.println(unvol);
 #endif //SQL_DEBUG
-            return unvol;
+            if (!firstline)
+            {
+                buffer.push(',');
+            }
+            else
+            {
+                firstline = false;
+            }
+
+            int i = 0;
+            while (unvol[i] != '\0')
+            {
+                // SerialPort.print("enqueue");
+                // SerialPort.println(unvol[i]);
+                buffer.push(unvol[i]);
+                i++;
+            }
+
+            return true;
         }
         else if (step_res == SQLITE_ERROR)
         {
@@ -926,25 +1148,35 @@ String VarioSqlFlight::getNextFlight()
             Serial.println("ERROR ICI");
 #endif //SQL_DEBUG
             haveNextFlight = false;
+            sqlite3_clear_bindings(nextFlightRes);
             sqlite3_finalize(nextFlightRes);
-            return "";
+            closeDb();
+
+            return false;
         }
         else
         {
 #ifdef SQL_DEBUG
-            Serial.println("Plus aucun vol" + String(step_res));
+            Serial.print("Plus aucun vol");
+            Serial.println(step_res);
 #endif //SQL_DEBUG
             haveNextFlight = false;
+            sqlite3_clear_bindings(nextFlightRes);
             sqlite3_finalize(nextFlightRes);
-            return "";
+            closeDb();
+            return false;
         }
     }
     else
     {
+        sqlite3_clear_bindings(nextFlightRes);
+        sqlite3_finalize(nextFlightRes);
+        closeDb();
 #ifdef SQL_DEBUG
         Serial.println("Aucun vol");
 #endif //SQL_DEBUG
-        return "";
+
+        return false;
     }
 }
 
@@ -968,6 +1200,7 @@ void VarioSqlFlight::executeMigration(String version, String sql)
     if (rc != SQLITE_OK)
     {
         closeDb();
+
         return;
     }
     sqlite3_bind_text(res, 1, (char *)version.c_str(), version.length(), SQLITE_STATIC);
@@ -989,6 +1222,7 @@ void VarioSqlFlight::executeMigration(String version, String sql)
                 closeDb();
             }
             sqlite3_finalize(res);
+
             return;
         }
     }
@@ -999,6 +1233,7 @@ void VarioSqlFlight::executeMigration(String version, String sql)
     if (rc != SQLITE_OK)
     {
         closeDb();
+
         return;
     }
 
@@ -1008,6 +1243,7 @@ void VarioSqlFlight::executeMigration(String version, String sql)
     if (rc != SQLITE_OK)
     {
         closeDb();
+
         return;
     }
 
@@ -1021,6 +1257,7 @@ void VarioSqlFlight::executeMigration(String version, String sql)
         Serial.printf("ERROR executing stmt: %s\n", sqlite3_errmsg(myDb));
 #endif //SQL_DEBUG
         closeDb();
+
         return;
     }
 
@@ -1036,6 +1273,7 @@ void VarioSqlFlight::executeMigration(String version, String sql)
         Serial.printf("ERROR preparing sql: %s\n", sqlite3_errmsg(myDb));
 #endif //SQL_DEBUG
         closeDb();
+
         return;
     }
 
@@ -1055,6 +1293,7 @@ void VarioSqlFlight::executeMigration(String version, String sql)
         Serial.printf("ERROR executing stmt: %s\n", sqlite3_errmsg(myDb));
 #endif //SQL_DEBUG
         closeDb();
+
         return;
     }
 
@@ -1069,10 +1308,164 @@ void VarioSqlFlight::executeMigration(String version, String sql)
         Serial.printf("reset failed");
 #endif //SQL_DEBUG
         closeDb();
+
         return;
     }
 #ifdef SQL_DEBUG
     Serial.printf("sqlite3_finalize");
 #endif //SQL_DEBUG
     sqlite3_finalize(res);
+}
+
+String VarioSqlFlight::escapeJson(const String &s)
+{
+    if (s == NULL || s.length() == 0)
+    {
+        return "\"\"";
+    }
+
+    char c = 0;
+    int i;
+    int len = s.length();
+    String sb;
+    String t;
+
+    sb.concat('"');
+    for (i = 0; i < len; i += 1)
+    {
+        c = s.charAt(i);
+
+        switch (c)
+        {
+        case '\\':
+        case '"':
+            sb.concat('\\');
+            sb.concat(c);
+            break;
+        case '/':
+            //                if (b == '<') {
+            sb.concat('\\');
+            //                }
+            sb.concat(c);
+            break;
+        case '\b':
+            sb.concat("\\b");
+            break;
+        case '\t':
+            sb.concat("\\t");
+            break;
+        case '\n':
+            sb.concat("\\n");
+            break;
+        case '\f':
+            sb.concat("\\f");
+            break;
+        case '\r':
+            sb.concat("\\r");
+            break;
+        default:
+            if (c < ' ')
+            {
+                t = "000" + String(c, HEX); // Integer.toHexString(c);
+                sb.concat("\\u" + t.substring(t.length() - 4));
+            }
+            else
+            {
+                sb.concat(c);
+            }
+        }
+    }
+
+    sb.concat('"');
+
+    return sb;
+}
+
+String VarioSqlFlight::getFlightsShort(String mode, String parcel)
+{
+
+    String output = "";
+    DynamicJsonDocument doc(4096);
+    int step_res;
+    int rc;
+    sqlite3_stmt *res;
+    const char *tail;
+
+#ifdef SQL_DEBUG
+    SerialPort.println("openDb");
+#endif //SQL_DEBUG
+
+    if (!isOpened)
+    {
+        if (openDb((char *)dbPath.c_str(), &myDb))
+        {
+            return output;
+        }
+    }
+
+    String sql;
+    sql = "SELECT COUNT(*) AS nf, time(SUM(strftime('%s', end_flight_time)- strftime('%s', start_flight_time)), 'unixepoch') AS du, ";
+
+    if (mode == "Y")
+    {
+        sql = sql + "strftime('%Y', flight_date) as 'gr' FROM flight GROUP BY strftime('%Y', flight_date)";
+    }
+    else if (mode == "M")
+    {
+        //dans ce cas, "parcel" est une année
+        sql = sql + "strftime('%Y%m', flight_date) as 'gr' FROM flight WHERE strftime('%Y', flight_date) = ? GROUP BY strftime('%Y%m', flight_date)";
+    }
+
+    rc = sqlite3_prepare_v2(myDb, sql.c_str(), 1000, &res, &tail);
+
+    if (mode == "Y")
+    {
+        //rien
+    }
+    else if (mode == "M")
+    {
+        sqlite3_bind_text(res, 1, (char *)parcel.c_str(), parcel.length(), SQLITE_STATIC);
+    }
+
+    if (rc != SQLITE_OK)
+    {
+#ifdef SQL_DEBUG
+        SerialPort.println("getFlightsShort: query error getFlightsShort");
+#endif //SQL_DEBUG
+        closeDb();
+        return output;
+    };
+    while ((step_res = sqlite3_step(res)) == SQLITE_ROW)
+    {
+        JsonObject obj1 = doc.createNestedObject();
+        obj1["nf"] = sqlite3_column_int(res, 0);
+        // obj1["ns"] = sqlite3_column_int(res, 1);
+        obj1["du"] = String((char *)sqlite3_column_text(res, 1));
+        obj1["gr"] = String((char *)sqlite3_column_text(res, 2));
+    }
+
+    if (step_res == SQLITE_ERROR)
+    {
+#ifdef SQL_DEBUG
+        Serial.println("Error executing query ");
+#endif //SQL_DEBUG
+
+        sqlite3_clear_bindings(res);
+        sqlite3_finalize(res);
+        closeDb();
+
+        return output;
+    }
+    else
+    {
+#ifdef SQL_DEBUG
+        Serial.print("Step res:");
+        Serial.println(step_res);
+#endif //SQL_DEBUG
+    }
+
+    serializeJson(doc, output);
+    sqlite3_finalize(res);
+
+    return output;
 }

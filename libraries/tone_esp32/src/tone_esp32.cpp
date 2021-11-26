@@ -104,7 +104,7 @@ void ToneEsp32::init(uint32_t pin)
 	TRACE();
 #endif //SOUND_DEBUG
 	
-	if ((pin != 25) and (pin != 26)) pin = 25;
+//	if ((pin != 25) and (pin != 26)) pin = 25;
 	Speaker_Pin = pin;
 	
 	Tone_Pin_Channel = TONE_PIN_CHANNEL;
