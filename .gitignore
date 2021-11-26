@@ -3,4 +3,5 @@
 *.bak
 *.old
 logFile.txt
-stackTrace.txt
+stackTrace.tx
+*DS_Store
